@@ -388,7 +388,7 @@ public class QuantumProviderService {
     }
 
     private String getShorsEducationalNote(int bitLength) {
-        return String.format("""
+        return """
                 📚 SHOR'S ALGORITHM EXPLAINED:
 
                 Shor's algorithm can factor large integers in polynomial time using quantum superposition.
@@ -405,11 +405,11 @@ public class QuantumProviderService {
                 can be stored and decrypted LATER when quantum computers mature!
 
                 ✅ PREVENTION: Use ML-KEM (CRYSTALS-Kyber) which is immune to Shor's algorithm.
-                """, bitLength, bitLength / 10, bitLength, (long) Math.pow(bitLength, 2) / 1000);
+                """.formatted(bitLength, bitLength / 10, bitLength, (long) Math.pow(bitLength, 2) / 1000);
     }
 
     private String getGroversEducationalNote(int keyBits) {
-        return String.format("""
+        return """
                 📚 GROVER'S ALGORITHM EXPLAINED:
 
                 Grover's algorithm provides quadratic speedup for unstructured search.
@@ -426,7 +426,7 @@ public class QuantumProviderService {
 
                 ✅ PREVENTION: Use ML-KEM for key encapsulation, which resists both
                 Shor's and Grover's algorithms.
-                """, keyBits, keyBits, keyBits, keyBits / 2);
+                """.formatted(keyBits, keyBits, keyBits, keyBits / 2);
     }
 
     // ==================== Result Classes ====================

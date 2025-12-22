@@ -144,26 +144,28 @@ public class AdminInitializer implements CommandLineRunner {
     }
 
     private void printWelcomeMessage() {
-        log.info("\n" +
-                "╔══════════════════════════════════════════════════════════════════╗\n" +
-                "║         PQC User & Document Service - READY                      ║\n" +
-                "╠══════════════════════════════════════════════════════════════════╣\n" +
-                "║                                                                  ║\n" +
-                "║  Default Admin Credentials:                                      ║\n" +
-                "║    Username: admin                                               ║\n" +
-                "║    Password: Admin@PQC2024!                                      ║\n" +
-                "║                                                                  ║\n" +
-                "║  Demo Users:                                                     ║\n" +
-                "║    officer / Officer@2024!                                       ║\n" +
-                "║    citizen / Citizen@2024!                                       ║\n" +
-                "║                                                                  ║\n" +
-                "║  API Endpoints:                                                  ║\n" +
-                "║    POST /api/auth/register    - Register new user                ║\n" +
-                "║    POST /api/auth/login       - Login and get JWT                ║\n" +
-                "║    GET  /api/users/me         - Get current user                 ║\n" +
-                "║    POST /api/documents        - Create document                  ║\n" +
-                "║    POST /api/documents/{id}/sign - Sign document                 ║\n" +
-                "║                                                                  ║\n" +
-                "╚══════════════════════════════════════════════════════════════════╝\n");
+        log.info("""
+                
+                ╔══════════════════════════════════════════════════════════════════╗
+                ║         PQC User & Document Service - READY                      ║
+                ╠══════════════════════════════════════════════════════════════════╣
+                ║                                                                  ║
+                ║  Default Admin Credentials:                                      ║
+                ║    Username: admin                                               ║
+                ║    Password: Admin@PQC2024!                                      ║
+                ║                                                                  ║
+                ║  Demo Users:                                                     ║
+                ║    officer / Officer@2024!                                       ║
+                ║    citizen / Citizen@2024!                                       ║
+                ║                                                                  ║
+                ║  API Endpoints:                                                  ║
+                ║    POST /api/auth/register    - Register new user                ║
+                ║    POST /api/auth/login       - Login and get JWT                ║
+                ║    GET  /api/users/me         - Get current user                 ║
+                ║    POST /api/documents        - Create document                  ║
+                ║    POST /api/documents/{id}/sign - Sign document                 ║
+                ║                                                                  ║
+                ╚══════════════════════════════════════════════════════════════════╝
+                """);
     }
 }

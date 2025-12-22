@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -226,8 +227,7 @@ public class InterceptionService {
                 .quantumVulnerable(quantumVulnerable)
                 .quantumResistant(quantumResistant)
                 .timestamp(LocalDateTime.now())
-                .message(String.format(
-                        "Harvested %d messages: %d VULNERABLE to quantum attack, %d PROTECTED",
+                .message("Harvested %d messages: %d VULNERABLE to quantum attack, %d PROTECTED".formatted(
                         harvested, quantumVulnerable, quantumResistant))
                 .build();
     }
@@ -286,7 +286,7 @@ public class InterceptionService {
 
     private String generateHarvestId() {
         return "HRV-" + System.currentTimeMillis() + "-" +
-                Long.toHexString(Double.doubleToLongBits(Math.random())).substring(0, 8);
+                Long.toHexString(Double.doubleToLongBits(ThreadLocalRandom.current().nextDouble())).substring(0, 8);
     }
 
     private CryptoAlgorithm determineAlgorithm(JsonNode node) {

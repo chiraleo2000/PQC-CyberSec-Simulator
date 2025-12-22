@@ -90,13 +90,17 @@ public class QuantumSimulatorService {
                     .resultDescription("RSA BROKEN! Shor's algorithm successfully factored the modulus. " +
                             "Private key recovered in simulated quantum time.")
                     .educationalLesson(
-                            "⚠️ 'HARVEST NOW, DECRYPT LATER' THREAT DEMONSTRATED!\n\n" +
-                                    "Shor's algorithm exploits quantum superposition to find prime factors " +
-                                    "exponentially faster than classical computers.\n\n" +
-                                    "• Classical computer: ~300 trillion years to break RSA-2048\n" +
-                                    "• Quantum computer: ~8 hours\n\n" +
-                                    "This is why data encrypted today with RSA may be compromised " +
-                                    "when quantum computers mature. Migrate to PQC NOW!")
+                            """
+                            ⚠️ 'HARVEST NOW, DECRYPT LATER' THREAT DEMONSTRATED!
+                            
+                            Shor's algorithm exploits quantum superposition to find prime factors \
+                            exponentially faster than classical computers.
+                            
+                            • Classical computer: ~300 trillion years to break RSA-2048
+                            • Quantum computer: ~8 hours
+                            
+                            This is why data encrypted today with RSA may be compromised \
+                            when quantum computers mature. Migrate to PQC NOW!""")
                     .build();
         }
 
@@ -137,10 +141,13 @@ public class QuantumSimulatorService {
                     .resultDescription("AES-128 COMPROMISED! Security reduced from 128 bits to 64 bits. " +
                             "Key space search now feasible with quantum computer.")
                     .educationalLesson(
-                            "Grover's algorithm provides quadratic speedup for unstructured search.\n\n" +
-                                    "• AES-128: 2^128 → 2^64 operations (VULNERABLE)\n" +
-                                    "• AES-256: 2^256 → 2^128 operations (Still secure)\n\n" +
-                                    "For quantum-era security, use AES-256 or better yet, ML-KEM for key exchange.")
+                            """
+                            Grover's algorithm provides quadratic speedup for unstructured search.
+                            
+                            • AES-128: 2^128 → 2^64 operations (VULNERABLE)
+                            • AES-256: 2^256 → 2^128 operations (Still secure)
+                            
+                            For quantum-era security, use AES-256 or better yet, ML-KEM for key exchange.""")
                     .build();
         } else if (algorithm == CryptoAlgorithm.AES_256) {
             return QuantumAttackResult.builder()
@@ -174,10 +181,13 @@ public class QuantumSimulatorService {
                     .resultDescription("HNDL ATTACK FAILED! Data encrypted with " + algorithm.getDisplayName() +
                             " remains secure even " + yearsInFuture + " years in the future.")
                     .educationalLesson(
-                            "✅ This is why organizations should migrate to PQC NOW!\n\n" +
-                                    "Data encrypted today with quantum-resistant algorithms will remain " +
-                                    "secure regardless of future quantum computing advances.\n\n" +
-                                    "The 'Harvest Now, Decrypt Later' threat is NEUTRALIZED by proactive PQC adoption.")
+                            """
+                            ✅ This is why organizations should migrate to PQC NOW!
+                            
+                            Data encrypted today with quantum-resistant algorithms will remain \
+                            secure regardless of future quantum computing advances.
+                            
+                            The 'Harvest Now, Decrypt Later' threat is NEUTRALIZED by proactive PQC adoption.""")
                     .build();
         }
 
@@ -192,15 +202,19 @@ public class QuantumSimulatorService {
                 .resultDescription("HNDL ATTACK SUCCESSFUL! Data encrypted " + yearsInFuture +
                         " years ago with " + algorithm.getDisplayName() + " has been decrypted!")
                 .educationalLesson(
-                        "⚠️ THIS IS THE 'HARVEST NOW, DECRYPT LATER' THREAT IN ACTION!\n\n" +
-                                "Adversaries are actively collecting encrypted data TODAY, waiting for " +
-                                "quantum computers to mature.\n\n" +
-                                "At risk:\n" +
-                                "• Government secrets\n" +
-                                "• Financial records\n" +
-                                "• Medical data\n" +
-                                "• Personal communications\n\n" +
-                                "The ONLY defense is to encrypt with PQC algorithms NOW!")
+                        """
+                        ⚠️ THIS IS THE 'HARVEST NOW, DECRYPT LATER' THREAT IN ACTION!
+                        
+                        Adversaries are actively collecting encrypted data TODAY, waiting for \
+                        quantum computers to mature.
+                        
+                        At risk:
+                        • Government secrets
+                        • Financial records
+                        • Medical data
+                        • Personal communications
+                        
+                        The ONLY defense is to encrypt with PQC algorithms NOW!""")
                 .build();
     }
 
