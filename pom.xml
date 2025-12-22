@@ -28,6 +28,7 @@
         <spring-boot.version>3.5.0</spring-boot.version>
         <bouncycastle.version>1.79</bouncycastle.version>
         <lombok.version>1.18.42</lombok.version>
+        <postgresql.version>42.7.7</postgresql.version>
     </properties>
 
     <dependencyManagement>
@@ -58,6 +59,13 @@
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcpkix-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
+            </dependency>
+
+            <!-- PostgreSQL - override Spring Boot managed version to fix CVE-2025-49146 -->
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
             </dependency>
 
             <!-- Lombok -->
