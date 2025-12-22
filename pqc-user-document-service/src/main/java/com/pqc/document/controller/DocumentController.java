@@ -80,7 +80,7 @@ public class DocumentController {
      * GET /api/documents/{documentId}
      */
     @GetMapping("/{documentId}")
-    public ResponseEntity<?> getDocument(@PathVariable("documentId") String documentId) {
+    public ResponseEntity<?> getDocument(@PathVariable String documentId) {
         try {
             Document document = documentService.getDocument(documentId);
             return ResponseEntity.ok(documentService.toDocumentResponse(document));
@@ -115,7 +115,7 @@ public class DocumentController {
     @GetMapping("/status/{status}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
     public ResponseEntity<List<DocumentResponse>> getDocumentsByStatus(
-            @PathVariable("status") DocumentStatus status) {
+            @PathVariable DocumentStatus status) {
         List<DocumentResponse> documents = documentService.getDocumentsByStatus(status)
                 .stream()
                 .map(documentService::toDocumentResponse)
@@ -129,7 +129,7 @@ public class DocumentController {
      */
     @PostMapping("/{documentId}/sign")
     public ResponseEntity<?> signDocument(
-            @PathVariable("documentId") String documentId,
+            @PathVariable String documentId,
             @AuthenticationPrincipal UserDetails userDetails) {
         try {
             User user = userService.getUserByUsername(userDetails.getUsername())
@@ -152,7 +152,7 @@ public class DocumentController {
      * POST /api/documents/{documentId}/verify
      */
     @PostMapping("/{documentId}/verify")
-    public ResponseEntity<?> verifyDocument(@PathVariable("documentId") String documentId) {
+    public ResponseEntity<?> verifyDocument(@PathVariable String documentId) {
         try {
             VerificationResult result = documentService.verifyDocument(documentId);
             return ResponseEntity.ok(result);
@@ -169,7 +169,7 @@ public class DocumentController {
     @PostMapping("/{documentId}/approve")
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
     public ResponseEntity<?> approveDocument(
-            @PathVariable("documentId") String documentId,
+            @PathVariable String documentId,
             @AuthenticationPrincipal UserDetails userDetails) {
         try {
             User user = userService.getUserByUsername(userDetails.getUsername())
@@ -192,7 +192,7 @@ public class DocumentController {
     @PostMapping("/{documentId}/reject")
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
     public ResponseEntity<?> rejectDocument(
-            @PathVariable("documentId") String documentId,
+            @PathVariable String documentId,
             @RequestBody(required = false) RejectRequest request) {
         try {
             String reason = request != null ? request.reason() : "Not specified";

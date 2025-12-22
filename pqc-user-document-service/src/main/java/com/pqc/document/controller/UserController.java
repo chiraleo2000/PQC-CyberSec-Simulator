@@ -56,7 +56,7 @@ public class UserController {
      * GET /api/users/{userId}
      */
     @GetMapping("/{userId}")
-    public ResponseEntity<?> getUserById(@PathVariable("userId") String userId) {
+    public ResponseEntity<?> getUserById(@PathVariable String userId) {
         return userService.getUserById(userId)
                 .map(user -> ResponseEntity.ok(userService.toUserResponse(user)))
                 .orElse(ResponseEntity.notFound().build());
@@ -68,7 +68,7 @@ public class UserController {
      */
     @GetMapping("/role/{role}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<UserResponse>> getUsersByRole(@PathVariable("role") UserRole role) {
+    public ResponseEntity<List<UserResponse>> getUsersByRole(@PathVariable UserRole role) {
         List<UserResponse> users = userService.getUsersByRole(role).stream()
                 .map(userService::toUserResponse)
                 .toList();
@@ -81,7 +81,7 @@ public class UserController {
      */
     @PutMapping("/{userId}/algorithm")
     public ResponseEntity<?> updateAlgorithmPreferences(
-            @PathVariable("userId") String userId,
+            @PathVariable String userId,
             @RequestBody AlgorithmUpdateRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
 
@@ -110,7 +110,7 @@ public class UserController {
      */
     @PostMapping("/{userId}/regenerate-keys")
     public ResponseEntity<?> regenerateKeys(
-            @PathVariable("userId") String userId,
+            @PathVariable String userId,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.getUserByUsername(userDetails.getUsername()).orElse(null);

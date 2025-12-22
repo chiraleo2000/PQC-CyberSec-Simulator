@@ -209,11 +209,11 @@ class HackerSimulationIntegrationTest {
     @Order(4)
     @DisplayName("4. Execute Shor's Algorithm Attack on RSA Data")
     void testShorAttack() throws Exception {
-        String request = String.format("""
+        String request = """
             {
                 "harvestId": "%s"
             }
-            """, vulnerableHarvestId);
+            """.formatted(vulnerableHarvestId);
 
         MvcResult result = mockMvc.perform(post("/api/hacker/attack/shor")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -244,11 +244,11 @@ class HackerSimulationIntegrationTest {
     @Order(5)
     @DisplayName("5. Shor's Attack Fails on ML-KEM Data")
     void testShorAttackOnMLKEM() throws Exception {
-        String request = String.format("""
+        String request = """
             {
                 "harvestId": "%s"
             }
-            """, protectedHarvestId);
+            """.formatted(protectedHarvestId);
 
         mockMvc.perform(post("/api/hacker/attack/shor")
                 .contentType(MediaType.APPLICATION_JSON)

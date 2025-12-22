@@ -71,16 +71,16 @@ class MessagingServiceIntegrationTest {
     @Order(1)
     @DisplayName("1. Register Officer Keys for ML-KEM Encryption")
     void testRegisterOfficerKeys() throws Exception {
-        String request = String.format("""
+        String request = """
             {
                 "userId": "officer_001",
                 "mlKemPublicKey": "%s",
                 "mlKemPrivateKey": "%s",
                 "preferredAlgorithm": "ML_KEM"
             }
-            """,
-            Base64.getEncoder().encodeToString(officerKeys.getPublicKey()),
-            Base64.getEncoder().encodeToString(officerKeys.getPrivateKey()));
+            """.formatted(
+                Base64.getEncoder().encodeToString(officerKeys.getPublicKey()),
+                Base64.getEncoder().encodeToString(officerKeys.getPrivateKey()));
 
         mockMvc.perform(post("/api/messages/keys")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -98,16 +98,16 @@ class MessagingServiceIntegrationTest {
     @Order(2)
     @DisplayName("2. Register Citizen Keys for ML-KEM Encryption")
     void testRegisterCitizenKeys() throws Exception {
-        String request = String.format("""
+        String request = """
             {
                 "userId": "citizen_001",
                 "mlKemPublicKey": "%s",
                 "mlKemPrivateKey": "%s",
                 "preferredAlgorithm": "ML_KEM"
             }
-            """,
-            Base64.getEncoder().encodeToString(citizenKeys.getPublicKey()),
-            Base64.getEncoder().encodeToString(citizenKeys.getPrivateKey()));
+            """.formatted(
+                Base64.getEncoder().encodeToString(citizenKeys.getPublicKey()),
+                Base64.getEncoder().encodeToString(citizenKeys.getPrivateKey()));
 
         mockMvc.perform(post("/api/messages/keys")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -304,7 +304,7 @@ class MessagingServiceIntegrationTest {
         };
 
         for (int i = 0; i < subjects.length; i++) {
-            String request = String.format("""
+            String request = """
                 {
                     "senderId": "officer_001",
                     "recipientId": "citizen_001",
@@ -312,7 +312,7 @@ class MessagingServiceIntegrationTest {
                     "content": "Official government communication #%d. Protected with post-quantum cryptography.",
                     "algorithm": "ML_KEM"
                 }
-                """, subjects[i], i + 1);
+                """.formatted(subjects[i], i + 1);
 
             mockMvc.perform(post("/api/messages/send")
                     .contentType(MediaType.APPLICATION_JSON)
