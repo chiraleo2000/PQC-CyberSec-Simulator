@@ -161,6 +161,7 @@ public class QuantumAttackService {
     /**
      * Get attack history.
      */
+    @Transactional(readOnly = true)
     public List<AttackAttempt> getAttackHistory() {
         return attackAttemptRepository.findTop10ByOrderByAttemptedAtDesc();
     }

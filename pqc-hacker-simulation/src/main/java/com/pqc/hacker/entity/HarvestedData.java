@@ -1,5 +1,6 @@
 package com.pqc.hacker.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.pqc.model.CryptoAlgorithm;
 import jakarta.persistence.*;
 import lombok.*;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class HarvestedData {
 
     @Id

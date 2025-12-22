@@ -4,6 +4,7 @@ import com.pqc.hacker.entity.AttackAttempt;
 import com.pqc.hacker.entity.AttackAttempt.AttackStatus;
 import com.pqc.hacker.entity.AttackAttempt.AttackType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -22,5 +23,6 @@ public interface AttackAttemptRepository extends JpaRepository<AttackAttempt, Lo
 
     long countByStatus(AttackStatus status);
 
+    @Query("SELECT a FROM AttackAttempt a LEFT JOIN FETCH a.harvestedData ORDER BY a.attemptedAt DESC LIMIT 10")
     List<AttackAttempt> findTop10ByOrderByAttemptedAtDesc();
 }

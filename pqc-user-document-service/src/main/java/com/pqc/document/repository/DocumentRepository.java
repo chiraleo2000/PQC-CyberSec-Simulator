@@ -4,6 +4,8 @@ import com.pqc.document.entity.Document;
 import com.pqc.document.entity.Document.DocumentStatus;
 import com.pqc.document.entity.Document.DocumentType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -12,17 +14,23 @@ import java.util.Optional;
 @Repository
 public interface DocumentRepository extends JpaRepository<Document, Long> {
 
-    Optional<Document> findByDocumentId(String documentId);
+    @Query("SELECT d FROM Document d LEFT JOIN FETCH d.applicant LEFT JOIN FETCH d.signer WHERE d.documentId = :documentId")
+    Optional<Document> findByDocumentId(@Param("documentId") String documentId);
 
     List<Document> findByApplicantId(Long applicantId);
 
-    List<Document> findByApplicantUserId(String userId);
+    @Query("SELECT d FROM Document d LEFT JOIN FETCH d.applicant LEFT JOIN FETCH d.signer WHERE d.applicant.userId = :userId")
+    List<Document> findByApplicantUserId(@Param("userId") String userId);
 
     List<Document> findBySignerId(Long signerId);
 
-    List<Document> findByStatus(DocumentStatus status);
+    @Query("SELECT d FROM Document d LEFT JOIN FETCH d.applicant LEFT JOIN FETCH d.signer WHERE d.status = :status")
+    List<Document> findByStatus(@Param("status") DocumentStatus status);
 
     List<Document> findByDocumentType(DocumentType type);
 
     List<Document> findByApplicantIdAndStatus(Long applicantId, DocumentStatus status);
+
+    @Query("SELECT d FROM Document d LEFT JOIN FETCH d.applicant LEFT JOIN FETCH d.signer")
+    List<Document> findAllWithAssociations();
 }

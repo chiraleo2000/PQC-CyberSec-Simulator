@@ -74,7 +74,7 @@ public class MessagingController {
      */
     @PostMapping("/{messageId}/decrypt")
     public ResponseEntity<?> decryptMessage(
-            @PathVariable String messageId,
+            @PathVariable("messageId") String messageId,
             @RequestBody DecryptRequest request) {
         try {
             var result = messagingService.decryptMessage(messageId, request.recipientId());
@@ -90,7 +90,7 @@ public class MessagingController {
      * GET /api/messages/{messageId}
      */
     @GetMapping("/{messageId}")
-    public ResponseEntity<?> getMessage(@PathVariable String messageId) {
+    public ResponseEntity<?> getMessage(@PathVariable("messageId") String messageId) {
         return messagingService.getMessage(messageId)
                 .map(msg -> ResponseEntity.ok(toMessageResponse(msg)))
                 .orElse(ResponseEntity.notFound().build());
@@ -101,7 +101,7 @@ public class MessagingController {
      * GET /api/messages/inbox/{recipientId}
      */
     @GetMapping("/inbox/{recipientId}")
-    public ResponseEntity<List<Map<String, Object>>> getInbox(@PathVariable String recipientId) {
+    public ResponseEntity<List<Map<String, Object>>> getInbox(@PathVariable("recipientId") String recipientId) {
         List<Map<String, Object>> messages = messagingService.getInbox(recipientId).stream()
                 .map(this::toMessageResponse)
                 .toList();
@@ -113,7 +113,7 @@ public class MessagingController {
      * GET /api/messages/sent/{senderId}
      */
     @GetMapping("/sent/{senderId}")
-    public ResponseEntity<List<Map<String, Object>>> getSent(@PathVariable String senderId) {
+    public ResponseEntity<List<Map<String, Object>>> getSent(@PathVariable("senderId") String senderId) {
         List<Map<String, Object>> messages = messagingService.getSent(senderId).stream()
                 .map(this::toMessageResponse)
                 .toList();
@@ -150,7 +150,7 @@ public class MessagingController {
      */
     @PostMapping("/{messageId}/harvest")
     public ResponseEntity<?> harvestMessage(
-            @PathVariable String messageId,
+            @PathVariable("messageId") String messageId,
             @RequestBody HarvestRequest request) {
         try {
             Message message = messagingService.markAsHarvested(messageId, request.harvesterId());

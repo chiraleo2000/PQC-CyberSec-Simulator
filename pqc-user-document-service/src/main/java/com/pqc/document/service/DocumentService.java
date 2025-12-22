@@ -199,13 +199,15 @@ public class DocumentService {
     /**
      * Get all documents.
      */
+    @Transactional(readOnly = true)
     public List<Document> getAllDocuments() {
-        return documentRepository.findAll();
+        return documentRepository.findAllWithAssociations();
     }
 
     /**
      * Get documents by applicant.
      */
+    @Transactional(readOnly = true)
     public List<Document> getDocumentsByApplicant(String applicantUserId) {
         return documentRepository.findByApplicantUserId(applicantUserId);
     }
@@ -213,6 +215,7 @@ public class DocumentService {
     /**
      * Get documents by status.
      */
+    @Transactional(readOnly = true)
     public List<Document> getDocumentsByStatus(DocumentStatus status) {
         return documentRepository.findByStatus(status);
     }
