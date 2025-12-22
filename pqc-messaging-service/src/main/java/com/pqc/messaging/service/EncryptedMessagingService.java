@@ -62,19 +62,19 @@ public class EncryptedMessagingService {
                     recipientKeys.publicKey(), recipientKeys.privateKey());
 
             EncapsulationResult encap = cryptoService.encapsulateMLKEM(keyPair.getPublic());
-            EncryptionResult encrypt = cryptoService.encryptAES256(
-                    content.getBytes(), encap.getSharedSecret());
+            EncryptionResult encrypt = cryptoService.encryptWithSharedSecret(
+                    content.getBytes(), encap.getSharedSecret(), 256);
 
             encryptedContent = encrypt.getCiphertext();
-            encapsulatedKey = encap.getEncapsulatedKey();
+            encapsulatedKey = encap.getEncapsulation();
             iv = encrypt.getIv();
 
             log.info("Message encrypted with ML-KEM + AES-256-GCM (QUANTUM-RESISTANT)");
         } else {
             // Fallback to AES-256 only
-            byte[] key = cryptoService.hashSHA384(senderId + recipientId).getHash();
-            EncryptionResult encrypt = cryptoService.encryptAES256(
-                    content.getBytes(), Arrays.copyOf(key, 32));
+            byte[] key = cryptoService.hashSHA384((senderId + recipientId).getBytes());
+            EncryptionResult encrypt = cryptoService.encryptWithSharedSecret(
+                    content.getBytes(), Arrays.copyOf(key, 32), 256);
 
             encryptedContent = encrypt.getCiphertext();
             iv = encrypt.getIv();
@@ -126,19 +126,20 @@ public class EncryptedMessagingService {
             byte[] sharedSecret = cryptoService.decapsulateMLKEM(
                     message.getEncapsulatedKey(), keyPair.getPrivate());
 
-            plaintext = cryptoService.decryptAES256(
-                    message.getEncryptedContent(), sharedSecret, message.getIv());
+            plaintext = cryptoService.decryptWithSharedSecret(
+                    message.getEncryptedContent(), message.getIv(), sharedSecret, 256);
 
             log.info("Message decrypted with ML-KEM (QUANTUM-RESISTANT)");
         } else {
             // AES fallback decryption
             byte[] key = cryptoService.hashSHA384(
-                    message.getSenderId() + recipientId).getHash();
+                    (message.getSenderId() + recipientId).getBytes());
 
-            plaintext = cryptoService.decryptAES256(
+            plaintext = cryptoService.decryptWithSharedSecret(
                     message.getEncryptedContent(),
+                    message.getIv(),
                     Arrays.copyOf(key, 32),
-                    message.getIv());
+                    256);
 
             log.info("Message decrypted with AES-256");
         }

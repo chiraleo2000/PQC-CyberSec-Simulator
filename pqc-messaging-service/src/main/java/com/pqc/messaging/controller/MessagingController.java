@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -168,20 +169,21 @@ public class MessagingController {
     }
 
     private Map<String, Object> toMessageResponse(Message msg) {
-        return Map.of(
-                "messageId", msg.getMessageId(),
-                "senderId", msg.getSenderId() != null ? msg.getSenderId() : "",
-                "recipientId", msg.getRecipientId() != null ? msg.getRecipientId() : "",
-                "subject", msg.getSubject() != null ? msg.getSubject() : "",
-                "encryptionAlgorithm", msg.getEncryptionAlgorithm().name(),
-                "isQuantumResistant", msg.getEncryptionAlgorithm().isQuantumResistant(),
-                "encryptedContent", Base64.getEncoder().encodeToString(msg.getEncryptedContent()),
-                "encapsulatedKey",
-                msg.getEncapsulatedKey() != null ? Base64.getEncoder().encodeToString(msg.getEncapsulatedKey()) : "",
-                "iv", msg.getIv() != null ? Base64.getEncoder().encodeToString(msg.getIv()) : "",
-                "isRead", msg.isRead(),
-                "isHarvested", msg.isHarvested(),
-                "createdAt", msg.getCreatedAt() != null ? msg.getCreatedAt().toString() : "");
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("messageId", msg.getMessageId());
+        response.put("senderId", msg.getSenderId() != null ? msg.getSenderId() : "");
+        response.put("recipientId", msg.getRecipientId() != null ? msg.getRecipientId() : "");
+        response.put("subject", msg.getSubject() != null ? msg.getSubject() : "");
+        response.put("encryptionAlgorithm", msg.getEncryptionAlgorithm().name());
+        response.put("isQuantumResistant", msg.getEncryptionAlgorithm().isQuantumResistant());
+        response.put("encryptedContent", Base64.getEncoder().encodeToString(msg.getEncryptedContent()));
+        response.put("encapsulatedKey",
+                msg.getEncapsulatedKey() != null ? Base64.getEncoder().encodeToString(msg.getEncapsulatedKey()) : "");
+        response.put("iv", msg.getIv() != null ? Base64.getEncoder().encodeToString(msg.getIv()) : "");
+        response.put("isRead", msg.isRead());
+        response.put("isHarvested", msg.isHarvested());
+        response.put("createdAt", msg.getCreatedAt() != null ? msg.getCreatedAt().toString() : "");
+        return response;
     }
 
     // Request DTOs
