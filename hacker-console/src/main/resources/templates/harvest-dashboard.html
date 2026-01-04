@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🕵️ Network Intercept - HNDL Harvest</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 50%, #0a0a0a 100%);
+            color: #00ff00;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.9);
+            border-bottom: 2px solid #ff6600;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            color: #ff6600;
+            font-size: 1.2em;
+            text-shadow: 0 0 10px #ff6600;
+        }
+        
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #ff0040;
+            font-size: 0.9em;
+        }
+        
+        .live-dot {
+            width: 10px;
+            height: 10px;
+            background: #ff0040;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 10px #ff0040; }
+            50% { opacity: 0.3; box-shadow: none; }
+        }
+        
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            padding: 8px 15px;
+            background: rgba(0, 0, 0, 0.7);
+            border-bottom: 1px solid #333;
+            font-size: 0.85em;
+        }
+        
+        .stat {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .stat-value { color: #00ccff; font-weight: bold; }
+        .stat-value.rsa { color: #ff0040; }
+        .stat-value.pqc { color: #00ff00; }
+        
+        .main-container {
+            height: calc(100vh - 90px);
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        /* Network packet visualization */
+        .packet-stream {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .network-packet {
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            border-radius: 6px;
+            overflow: hidden;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .network-packet.rsa { border-left: 4px solid #ff0040; }
+        .network-packet.pqc { border-left: 4px solid #00ff00; }
+        .network-packet.aes { border-left: 4px solid #ffcc00; }
+        
+        .packet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: rgba(30, 30, 50, 0.8);
+            border-bottom: 1px solid #333;
+        }
+        
+        .packet-route {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85em;
+        }
+        
+        .route-arrow {
+            color: #ff6600;
+            animation: flowArrow 1s infinite;
+        }
+        
+        @keyframes flowArrow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .packet-meta {
+            display: flex;
+            gap: 10px;
+            font-size: 0.75em;
+        }
+        
+        .cipher-badge {
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        
+        .cipher-badge.vulnerable {
+            background: #ff0040;
+            color: white;
+        }
+        
+        .cipher-badge.secure {
+            background: #00cc00;
+            color: white;
+        }
+        
+        .cipher-badge.partial {
+            background: #ffcc00;
+            color: black;
+        }
+        
+        .packet-body {
+            padding: 10px 12px;
+        }
+        
+        .encrypted-stream {
+            background: #000;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.7em;
+            color: #444;
+            word-break: break-all;
+            max-height: 80px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .encrypted-stream::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 20px;
+            background: linear-gradient(transparent, #000);
+        }
+        
+        .encrypted-stream.flowing {
+            animation: dataFlow 2s linear infinite;
+        }
+        
+        @keyframes dataFlow {
+            0% { background-position: 0 0; }
+            100% { background-position: 100px 0; }
+        }
+        
+        .packet-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 12px;
+            background: rgba(0, 0, 0, 0.5);
+            font-size: 0.75em;
+            color: #666;
+        }
+        
+        .harvest-btn {
+            background: linear-gradient(135deg, #ff6600, #cc5500);
+            border: none;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            transition: all 0.2s;
+        }
+        
+        .harvest-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 10px #ff6600;
+        }
+        
+        .harvest-btn.harvested {
+            background: #333;
+            color: #00ff00;
+        }
+        
+        /* Signature section */
+        .signature-section {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(50, 50, 80, 0.3);
+            border-radius: 4px;
+            border: 1px dashed #444;
+        }
+        
+        .signature-label {
+            font-size: 0.75em;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        
+        .signature-hex {
+            font-family: 'Courier New', monospace;
+            font-size: 0.65em;
+            color: #666;
+            word-break: break-all;
+        }
+        
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .empty-state .icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .control-btn {
+            background: rgba(0, 200, 255, 0.2);
+            border: 1px solid #00ccff;
+            color: #00ccff;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+        }
+        
+        .control-btn:hover {
+            background: rgba(0, 200, 255, 0.4);
+        }
+        
+        .control-btn.active {
+            background: #00ccff;
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📡 NETWORK INTERCEPT - Harvest Now, Decrypt Later</h1>
+        <div class="controls">
+            <button class="control-btn active" id="autoCapture">Auto-Capture: ON</button>
+            <button class="control-btn" onclick="harvestAll()">📦 Harvest All</button>
+            <button class="control-btn" onclick="sendToDecrypt()">➡️ Send to Decrypt</button>
+        </div>
+        <div class="live-indicator">
+            <div class="live-dot"></div>
+            <span>INTERCEPTING</span>
+        </div>
+    </div>
+    
+    <div class="stats-bar">
+        <div class="stat">
+            <span>Packets:</span>
+            <span class="stat-value" id="totalPackets">0</span>
+        </div>
+        <div class="stat">
+            <span>🔐 KEM RSA:</span>
+            <span class="stat-value rsa" id="rsaKemCount">0</span>
+        </div>
+        <div class="stat">
+            <span>🔐 KEM PQC:</span>
+            <span class="stat-value pqc" id="pqcKemCount">0</span>
+        </div>
+        <div class="stat">
+            <span>✍️ Sig RSA:</span>
+            <span class="stat-value rsa" id="rsaSigCount">0</span>
+        </div>
+        <div class="stat">
+            <span>✍️ Sig PQC:</span>
+            <span class="stat-value pqc" id="pqcSigCount">0</span>
+        </div>
+        <div class="stat">
+            <span>Harvested:</span>
+            <span class="stat-value" id="harvestedCount">0</span>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <div class="packet-stream" id="packetStream">
+            <div class="empty-state">
+                <div class="icon">📡</div>
+                <p>Monitoring network traffic...</p>
+                <p style="font-size: 0.8em; margin-top: 10px;">
+                    Waiting for encrypted transmissions between Gov Portal services
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global state
+        let packets = [];
+        let harvestedPackets = new Set();
+        let packetId = 0;
+        let autoCapture = true;
+        let pollInterval = null;
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            startPolling();
+            
+            document.getElementById('autoCapture').addEventListener('click', toggleAutoCapture);
+        });
+        
+        function toggleAutoCapture() {
+            autoCapture = !autoCapture;
+            const btn = document.getElementById('autoCapture');
+            btn.textContent = `Auto-Capture: ${autoCapture ? 'ON' : 'OFF'}`;
+            btn.classList.toggle('active', autoCapture);
+        }
+        
+        function startPolling() {
+            // Poll for new transactions every 2 seconds
+            pollInterval = setInterval(fetchTransactions, 2000);
+            fetchTransactions();
+        }
+        
+        async function fetchTransactions() {
+            try {
+                const response = await fetch('/api/hacker/intercept/live');
+                const data = await response.json();
+                
+                if (data.newTransactions && data.newTransactions.length > 0) {
+                    data.newTransactions.forEach(tx => {
+                        // Map field names from API to our format
+                        const mapped = {
+                            documentId: tx.documentId,
+                            type: tx.documentType || tx.type,
+                            applicant: tx.applicant,
+                            encryption: (tx.encryptionAlgorithm || tx.encryption || 'RSA-2048').replace('_', '-').replace('ML-KEM', 'ML-KEM-768'),
+                            signature: (tx.signatureAlgorithm || tx.signature || 'RSA_2048').replace('_', '-').replace('ML-DSA', 'ML-DSA-65'),
+                            status: tx.status,
+                            encryptedPayload: tx.encryptedPayload
+                        };
+                        const existingIds = packets.map(p => p.documentId);
+                        if (!existingIds.includes(mapped.documentId)) {
+                            addPacket(mapped);
+                        }
+                    });
+                }
+            } catch (e) {
+                console.log('API error, trying direct fetch:', e);
+                // Fallback: check gov-portal directly
+                try {
+                    const response = await fetch('http://localhost:8181/api/transactions');
+                    const transactions = await response.json();
+                    
+                    transactions.forEach(tx => {
+                        const mapped = {
+                            documentId: tx.documentId,
+                            type: tx.type,
+                            applicant: tx.applicant,
+                            encryption: (tx.encryption || 'RSA-2048').replace('_', '-').replace('ML-KEM', 'ML-KEM-768'),
+                            signature: (tx.signature || 'RSA_2048').replace('_', '-').replace('ML-DSA', 'ML-DSA-65'),
+                            status: tx.status
+                        };
+                        const existingIds = packets.map(p => p.documentId);
+                        if (!existingIds.includes(mapped.documentId)) {
+                            addPacket(mapped);
+                        }
+                    });
+                } catch (e2) {
+                    console.log('Waiting for transactions...');
+                }
+            }
+        }
+        
+        function addPacket(transaction) {
+            const packet = {
+                id: ++packetId,
+                documentId: transaction.documentId,
+                type: transaction.type,
+                applicant: transaction.applicant,
+                encryption: transaction.encryption || 'RSA-2048',
+                signature: transaction.signature || 'RSA-2048',
+                status: transaction.status,
+                timestamp: new Date().toISOString(),
+                encryptedData: generateEncryptedPayload(transaction.encryption),
+                signatureData: generateSignatureData(transaction.signature),
+                size: Math.floor(Math.random() * 2048) + 512,
+                harvested: autoCapture
+            };
+            
+            packets.unshift(packet);
+            
+            if (autoCapture) {
+                harvestedPackets.add(packet.id);
+                // Send to backend for storage
+                harvestPacket(packet);
+            }
+            
+            renderPackets();
+            updateStats();
+        }
+        
+        function generateEncryptedPayload(algo) {
+            const length = algo.includes('ML-KEM') ? 1568 : 512;
+            let hex = '';
+            for (let i = 0; i < length; i++) {
+                hex += Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase();
+            }
+            return hex;
+        }
+        
+        function generateSignatureData(algo) {
+            const length = algo.includes('ML-DSA') ? 4627 : 256;
+            let hex = '';
+            for (let i = 0; i < length; i++) {
+                hex += Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase();
+            }
+            return hex;
+        }
+        
+        async function harvestPacket(packet) {
+            try {
+                await fetch('/api/hacker/harvest/packet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(packet)
+                });
+            } catch (e) {
+                console.log('Storing locally');
+            }
+        }
+        
+        function renderPackets() {
+            const container = document.getElementById('packetStream');
+            
+            if (packets.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📡</div>
+                        <p>Monitoring network traffic...</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = packets.slice(0, 50).map(packet => {
+                const isKemPqc = packet.encryption.includes('ML-KEM');
+                const isSigPqc = packet.signature.includes('ML-DSA');
+                const isKemRsa = packet.encryption.includes('RSA');
+                const isSigRsa = packet.signature.includes('RSA');
+                
+                // Overall packet status based on weakest link
+                const packetClass = (isKemRsa || isSigRsa) ? 'rsa' : 'pqc';
+                const kemClass = isKemPqc ? 'secure' : (isKemRsa ? 'vulnerable' : 'partial');
+                const sigClass = isSigPqc ? 'secure' : (isSigRsa ? 'vulnerable' : 'partial');
+                const isHarvested = harvestedPackets.has(packet.id);
+                
+                return `
+                    <div class="network-packet ${packetClass}">
+                        <div class="packet-header">
+                            <div class="packet-route">
+                                <span>👤 ${packet.applicant}</span>
+                                <span class="route-arrow">→→→</span>
+                                <span>🏛️ Gov Portal</span>
+                                <span class="route-arrow">→→→</span>
+                                <span>🗄️ Database</span>
+                            </div>
+                            <div class="packet-meta">
+                                <span class="cipher-badge ${kemClass}" title="Key Encapsulation">🔐 ${packet.encryption}</span>
+                                <span class="cipher-badge ${sigClass}" title="Digital Signature">✍️ ${packet.signature}</span>
+                                <span>${packet.size} bytes</span>
+                            </div>
+                        </div>
+                        <div class="packet-body">
+                            <div style="font-size: 0.8em; color: #888; margin-bottom: 5px;">
+                                📄 ${packet.type} | ID: ${packet.documentId}
+                            </div>
+                            <div class="encrypted-stream ${isHarvested ? '' : 'flowing'}">
+                                🔐 ENCRYPTED PAYLOAD (${packet.encryption}):<br>
+                                ${formatHex(packet.encryptedData)}
+                            </div>
+                            <div class="signature-section">
+                                <div class="signature-label">✍️ Digital Signature (${packet.signature}):</div>
+                                <div class="signature-hex">
+                                    ${formatHex(packet.signatureData.substring(0, 256))}...
+                                </div>
+                            </div>
+                        </div>
+                        <div class="packet-footer">
+                            <span>${new Date(packet.timestamp).toLocaleTimeString()}</span>
+                            <button class="harvest-btn ${isHarvested ? 'harvested' : ''}" 
+                                    onclick="toggleHarvest(${packet.id})"
+                                    ${isHarvested ? 'disabled' : ''}>
+                                ${isHarvested ? '✅ Harvested' : '🎯 Harvest'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function formatHex(hex) {
+            return hex.match(/.{1,32}/g)?.slice(0, 4).join('<br>') || hex;
+        }
+        
+        function toggleHarvest(id) {
+            const packet = packets.find(p => p.id === id);
+            if (packet && !harvestedPackets.has(id)) {
+                harvestedPackets.add(id);
+                harvestPacket(packet);
+                renderPackets();
+                updateStats();
+            }
+        }
+        
+        function harvestAll() {
+            packets.forEach(packet => {
+                if (!harvestedPackets.has(packet.id)) {
+                    harvestedPackets.add(packet.id);
+                    harvestPacket(packet);
+                }
+            });
+            renderPackets();
+            updateStats();
+        }
+        
+        function sendToDecrypt() {
+            // Open decrypt dashboard with harvested data
+            const harvestedData = packets.filter(p => harvestedPackets.has(p.id));
+            localStorage.setItem('harvestedForDecrypt', JSON.stringify(harvestedData));
+            window.open('/decrypt', '_blank');
+        }
+        
+        function updateStats() {
+            document.getElementById('totalPackets').textContent = packets.length;
+            
+            // KEM (Key Encapsulation) stats
+            document.getElementById('rsaKemCount').textContent = 
+                packets.filter(p => p.encryption.includes('RSA')).length;
+            document.getElementById('pqcKemCount').textContent = 
+                packets.filter(p => p.encryption.includes('ML-KEM')).length;
+            
+            // Digital Signature stats
+            document.getElementById('rsaSigCount').textContent = 
+                packets.filter(p => p.signature.includes('RSA')).length;
+            document.getElementById('pqcSigCount').textContent = 
+                packets.filter(p => p.signature.includes('ML-DSA')).length;
+            
+            document.getElementById('harvestedCount').textContent = harvestedPackets.size;
+        }
+    </script>
+</body>
+</html>

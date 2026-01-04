@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Application - Government Portal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f6f9;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+        }
+        .header h1 { font-size: 22px; }
+        .header nav a {
+            color: white;
+            text-decoration: none;
+            margin-left: 15px;
+            padding: 8px 14px;
+            border-radius: 5px;
+        }
+        .header nav a:hover { background: rgba(255,255,255,0.2); }
+
+        .review-container {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 35px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+        .card h2 {
+            color: #1a5276;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .doc-info {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .info-item label {
+            display: block;
+            color: #666;
+            font-size: 12px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        .info-item .value {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .doc-content {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.6;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .encryption-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .enc-RSA_2048 { background: #f8d7da; color: #721c24; }
+        .enc-ML_KEM_768 { background: #d4edda; color: #155724; }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        .status-SUBMITTED { background: #fff3cd; color: #856404; }
+        .status-APPROVED { background: #d4edda; color: #155724; }
+        .status-REJECTED { background: #f8d7da; color: #721c24; }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .btn {
+            flex: 1;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn-approve { background: #28a745; color: white; }
+        .btn-reject { background: #dc3545; color: white; }
+        .btn-back { background: #6c757d; color: white; }
+
+        .security-notice {
+            background: #e7f3ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .security-notice.warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+        .security-notice p {
+            color: #004085;
+            font-size: 14px;
+        }
+        .security-notice.warning p { color: #856404; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>🏛️ Government Portal - Officer Review</h1>
+        <nav>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+
+    <div class="review-container">
+        <div class="card">
+            <h2>📋 Application Review</h2>
+            
+            <div class="doc-info">
+                <div class="info-item">
+                    <label>Document ID</label>
+                    <div class="value" th:text="${document.documentId}">DOC-12345678</div>
+                </div>
+                <div class="info-item">
+                    <label>Document Type</label>
+                    <div class="value" th:text="${document.documentType.displayName}">License</div>
+                </div>
+                <div class="info-item">
+                    <label>Applicant</label>
+                    <div class="value" th:text="${document.applicant.fullName}">John Smith</div>
+                </div>
+                <div class="info-item">
+                    <label>Submitted</label>
+                    <div class="value" th:text="${#temporals.format(document.createdAt, 'MMM dd, yyyy HH:mm')}">Dec 30, 2024</div>
+                </div>
+                <div class="info-item">
+                    <label>Status</label>
+                    <div>
+                        <span class="status-badge" 
+                              th:classappend="'status-' + ${document.status}"
+                              th:text="${document.status}">SUBMITTED</span>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <label>Encryption</label>
+                    <div>
+                        <span class="encryption-badge" 
+                              th:classappend="'enc-' + ${document.signatureAlgorithm}"
+                              th:text="${document.signatureAlgorithm}">ML_KEM_768</span>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="color: #333; margin: 20px 0 10px;">📄 Document Content</h3>
+            <div class="doc-content" th:text="${document.content}">
+                Document content will appear here...
+            </div>
+
+            <div th:if="${document.signatureAlgorithm.name() == 'RSA_2048'}" class="security-notice warning">
+                <p>⚠️ <strong>Security Warning:</strong> This document was encrypted with RSA-2048, 
+                which is vulnerable to future quantum attacks. The data may be at risk under 
+                "Harvest Now, Decrypt Later" attacks.</p>
+            </div>
+
+            <div th:if="${document.signatureAlgorithm.name() == 'ML_KEM_768'}" class="security-notice">
+                <p>✅ <strong>Quantum-Safe:</strong> This document was encrypted with ML-KEM-768 (NIST FIPS 203), 
+                providing protection against quantum computer attacks.</p>
+            </div>
+        </div>
+
+        <div class="card" th:if="${document.status.name() == 'SUBMITTED'}">
+            <h2>⚖️ Officer Decision</h2>
+            <p style="color: #666; margin-bottom: 20px;">
+                Review the application above and approve or reject:
+            </p>
+            
+            <div class="action-buttons">
+                <form th:action="@{'/officer/approve/' + ${document.documentId}}" method="POST" style="flex: 1;">
+                    <button type="submit" class="btn btn-approve" style="width: 100%;">
+                        ✅ Approve Application
+                    </button>
+                </form>
+                <form th:action="@{'/officer/reject/' + ${document.documentId}}" method="POST" style="flex: 1;">
+                    <button type="submit" class="btn btn-reject" style="width: 100%;">
+                        ❌ Reject Application
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card" th:if="${document.status.name() != 'SUBMITTED'}">
+            <h2>📝 Decision Recorded</h2>
+            <p th:if="${document.signer != null}">
+                Processed by: <strong th:text="${document.signer.fullName}">Officer</strong>
+                on <span th:text="${#temporals.format(document.signedAt, 'MMM dd, yyyy HH:mm')}">Date</span>
+            </p>
+        </div>
+
+        <a href="/dashboard" class="btn btn-back" style="display: inline-block; text-decoration: none; margin-top: 10px;">
+            ← Back to Dashboard
+        </a>
+    </div>
+</body>
+</html>

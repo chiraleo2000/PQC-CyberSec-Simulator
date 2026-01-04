@@ -14,10 +14,10 @@
     <description>Post-Quantum Cryptography Simulation Suite - "Harvest Now, Decrypt Later" Prevention Demo</description>
 
     <modules>
-        <module>pqc-crypto-core</module>
-        <module>pqc-user-document-service</module>
-        <module>pqc-messaging-service</module>
-        <module>pqc-hacker-simulation</module>
+        <module>crypto-lib</module>
+        <module>gov-portal</module>
+        <module>secure-messaging</module>
+        <module>hacker-console</module>
     </modules>
 
     <properties>
@@ -45,7 +45,7 @@
             <!-- Internal modules -->
             <dependency>
                 <groupId>com.pqc</groupId>
-                <artifactId>pqc-crypto-core</artifactId>
+                <artifactId>crypto-lib</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -86,6 +86,13 @@
                     <version>3.13.0</version>
                     <configuration>
                         <parameters>true</parameters>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
                     </configuration>
                 </plugin>
                 <plugin>

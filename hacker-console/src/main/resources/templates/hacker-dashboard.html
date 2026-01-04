@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🕵️ Hacker Console - Quantum Attack Simulator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 50%, #0a0a0a 100%);
+            color: #00ff00;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.8);
+            border-bottom: 2px solid #ff0040;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            color: #ff0040;
+            font-size: 1.5em;
+            text-shadow: 0 0 10px #ff0040;
+        }
+        
+        .gpu-status {
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid #00ff00;
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+        
+        .gpu-status.active { border-color: #00ff00; color: #00ff00; }
+        .gpu-status.inactive { border-color: #ff6600; color: #ff6600; }
+        
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            height: calc(100vh - 80px);
+        }
+        
+        .panel {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .panel-header {
+            background: linear-gradient(90deg, #1a1a2e, #16213e);
+            padding: 12px 15px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .panel-header h2 {
+            font-size: 1.1em;
+            color: #00ccff;
+        }
+        
+        .panel-header .count {
+            background: #ff0040;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.9em;
+        }
+        
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        /* Intercepted Data Styles */
+        .intercepted-packet {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+            border-left: 3px solid #ff6600;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.85em;
+        }
+        
+        .intercepted-packet.rsa { border-left-color: #ff0040; }
+        .intercepted-packet.mlkem { border-left-color: #00ff00; }
+        
+        .packet-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            color: #888;
+        }
+        
+        .packet-cipher {
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+        }
+        
+        .packet-cipher.vulnerable { background: #ff0040; color: white; }
+        .packet-cipher.safe { background: #00cc00; color: white; }
+        
+        .encrypted-hex {
+            background: #000;
+            padding: 8px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75em;
+            color: #666;
+            word-break: break-all;
+            margin: 8px 0;
+            max-height: 60px;
+            overflow: hidden;
+        }
+        
+        .packet-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            transition: all 0.3s;
+        }
+        
+        .btn-attack {
+            background: linear-gradient(135deg, #ff0040, #cc0033);
+            color: white;
+        }
+        
+        .btn-attack:hover { transform: scale(1.05); box-shadow: 0 0 15px #ff0040; }
+        .btn-attack:disabled { background: #333; cursor: not-allowed; }
+        
+        .btn-harvest {
+            background: linear-gradient(135deg, #ff6600, #cc5500);
+            color: white;
+        }
+        
+        .btn-harvest:hover { transform: scale(1.05); box-shadow: 0 0 15px #ff6600; }
+        
+        /* Decrypted Data Styles */
+        .decrypted-data {
+            background: rgba(255, 0, 64, 0.1);
+            border: 2px solid #ff0040;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .decrypted-data h3 {
+            color: #ff0040;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+        
+        .decrypted-field {
+            display: flex;
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .decrypted-field:last-child { border-bottom: none; }
+        
+        .field-label {
+            color: #888;
+            width: 120px;
+            flex-shrink: 0;
+        }
+        
+        .field-value {
+            color: #ff6666;
+        }
+        
+        /* Protected Data Styles */
+        .protected-data {
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .protected-data h3 {
+            color: #00ff00;
+        }
+        
+        /* Attack Console */
+        .attack-console {
+            background: #000;
+            padding: 10px;
+            font-size: 0.8em;
+            height: 200px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            padding: 2px 0;
+            border-bottom: 1px solid #111;
+        }
+        
+        .log-entry.error { color: #ff0040; }
+        .log-entry.success { color: #00ff00; }
+        .log-entry.warning { color: #ffcc00; }
+        .log-entry.info { color: #00ccff; }
+        
+        /* Live indicator */
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #ff0040;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        /* Auto-refresh toggle */
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .toggle {
+            position: relative;
+            width: 50px;
+            height: 25px;
+        }
+        
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #333;
+            transition: .4s;
+            border-radius: 25px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 17px;
+            width: 17px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        .toggle input:checked + .toggle-slider {
+            background-color: #00ff00;
+        }
+        
+        .toggle input:checked + .toggle-slider:before {
+            transform: translateX(25px);
+        }
+        
+        /* Stats bar */
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-bottom: 1px solid #333;
+        }
+        
+        .stat {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        
+        .stat-value.vulnerable { color: #ff0040; }
+        .stat-value.safe { color: #00ff00; }
+        .stat-value.total { color: #00ccff; }
+        
+        .stat-label {
+            font-size: 0.8em;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🕵️ HACKER CONSOLE - Quantum Attack Simulator</h1>
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <div class="auto-refresh">
+                <span>Live Monitor</span>
+                <label class="toggle">
+                    <input type="checkbox" id="autoRefresh" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="gpu-status" id="gpuStatus">
+                🎮 Loading GPU...
+            </div>
+        </div>
+    </div>
+    
+    <div class="stats-bar">
+        <div class="stat">
+            <span class="stat-value total" id="totalPackets">0</span>
+            <span class="stat-label">Intercepted Packets</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value vulnerable" id="vulnerableCount">0</span>
+            <span class="stat-label">RSA Vulnerable</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value safe" id="safeCount">0</span>
+            <span class="stat-label">PQC Protected</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value vulnerable" id="decryptedCount">0</span>
+            <span class="stat-label">Decrypted</span>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <!-- Left Panel: Intercepted Encrypted Traffic -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>📡 Intercepted Encrypted Traffic</h2>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <div class="live-indicator">
+                        <div class="live-dot"></div>
+                        <span>LIVE</span>
+                    </div>
+                    <button class="btn btn-harvest" onclick="harvestNow()">🎯 Harvest Now</button>
+                </div>
+            </div>
+            <div class="panel-content" id="interceptedPanel">
+                <p style="color: #666; text-align: center; padding: 20px;">
+                    Monitoring network traffic...<br>
+                    Waiting for encrypted data transmissions...
+                </p>
+            </div>
+        </div>
+        
+        <!-- Right Panel: Attack Results -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>⚛️ Quantum Attack Results</h2>
+                <button class="btn btn-attack" onclick="attackAllVulnerable()">🚀 Attack All RSA</button>
+            </div>
+            <div class="panel-content" id="attackResultsPanel">
+                <p style="color: #666; text-align: center; padding: 20px;">
+                    No attacks executed yet.<br>
+                    Harvest encrypted data first, then execute quantum attacks.
+                </p>
+            </div>
+            
+            <!-- Attack Console Log -->
+            <div class="panel-header" style="border-top: 1px solid #333;">
+                <h2>📜 Attack Console</h2>
+            </div>
+            <div class="attack-console" id="attackConsole">
+                <div class="log-entry info">[SYSTEM] Hacker console initialized</div>
+                <div class="log-entry info">[SYSTEM] Waiting for quantum computer access...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global state
+        let interceptedData = [];
+        let attackResults = [];
+        let autoRefreshInterval = null;
+        let gpuInfo = null;
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadGpuStatus();
+            loadInterceptedData();
+            
+            // Auto-refresh toggle
+            document.getElementById('autoRefresh').addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    startAutoRefresh();
+                } else {
+                    stopAutoRefresh();
+                }
+            });
+            
+            startAutoRefresh();
+        });
+        
+        function startAutoRefresh() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            autoRefreshInterval = setInterval(loadInterceptedData, 3000);
+            log('Auto-refresh enabled - monitoring every 3 seconds', 'info');
+        }
+        
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+            log('Auto-refresh disabled', 'warning');
+        }
+        
+        async function loadGpuStatus() {
+            try {
+                const response = await fetch('/api/hacker/gpu');
+                const data = await response.json();
+                gpuInfo = data;
+                
+                const statusEl = document.getElementById('gpuStatus');
+                statusEl.textContent = `🎮 ${data.gpuName} (${data.vramMb}MB)`;
+                statusEl.classList.add('active');
+                
+                log(`GPU connected: ${data.gpuName}`, 'success');
+            } catch (e) {
+                document.getElementById('gpuStatus').textContent = '⚠️ GPU Unavailable';
+                document.getElementById('gpuStatus').classList.add('inactive');
+                log('GPU connection failed', 'error');
+            }
+        }
+        
+        async function loadInterceptedData() {
+            try {
+                const response = await fetch('/api/hacker/harvested');
+                const data = await response.json();
+                
+                if (data.length !== interceptedData.length) {
+                    interceptedData = data;
+                    updateInterceptedPanel();
+                    updateStats();
+                    
+                    if (data.length > 0) {
+                        log(`Intercepted ${data.length} encrypted packets`, 'warning');
+                    }
+                }
+            } catch (e) {
+                log('Failed to load intercepted data: ' + e.message, 'error');
+            }
+        }
+        
+        async function harvestNow() {
+            log('Initiating network harvest...', 'info');
+            
+            try {
+                const response = await fetch('/api/hacker/harvest/transactions', {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.harvest && result.harvest.transactionCount > 0) {
+                    log(`✅ Harvested ${result.harvest.transactionCount} encrypted packets!`, 'success');
+                    await loadInterceptedData();
+                } else {
+                    log('No new packets to harvest', 'warning');
+                }
+            } catch (e) {
+                log('Harvest failed: ' + e.message, 'error');
+            }
+        }
+        
+        function updateInterceptedPanel() {
+            const panel = document.getElementById('interceptedPanel');
+            
+            if (interceptedData.length === 0) {
+                panel.innerHTML = `
+                    <p style="color: #666; text-align: center; padding: 20px;">
+                        No encrypted data intercepted yet.<br>
+                        Click "Harvest Now" or wait for transmissions...
+                    </p>
+                `;
+                return;
+            }
+            
+            panel.innerHTML = interceptedData.map((packet, idx) => {
+                const isVulnerable = packet.encryptionAlgorithm && 
+                    (packet.encryptionAlgorithm.includes('RSA') || packet.encryptionAlgorithm.includes('rsa'));
+                const cipherClass = isVulnerable ? 'vulnerable' : 'safe';
+                const packetClass = isVulnerable ? 'rsa' : 'mlkem';
+                
+                // Generate hex representation of encrypted payload
+                const encryptedHex = generateEncryptedHex(packet.documentId || packet.id, packet.encryptionAlgorithm);
+                
+                return `
+                    <div class="intercepted-packet ${packetClass}">
+                        <div class="packet-header">
+                            <span>📦 Packet #${idx + 1} | ${packet.documentId || packet.id || 'Unknown'}</span>
+                            <span class="packet-cipher ${cipherClass}">${packet.encryptionAlgorithm || 'Unknown'}</span>
+                        </div>
+                        <div class="encrypted-hex">
+                            🔒 ${encryptedHex}
+                        </div>
+                        <div style="color: #666; font-size: 0.8em;">
+                            Source: gov-portal:8181 | Size: ${256 + idx * 64} bytes | 
+                            ${new Date(packet.interceptedAt || Date.now()).toLocaleTimeString()}
+                        </div>
+                        <div class="packet-actions">
+                            ${isVulnerable ? 
+                                `<button class="btn btn-attack" onclick="attackPacket(${idx})">⚛️ Shor's Attack</button>` :
+                                `<span style="color: #00ff00;">🛡️ Quantum-Safe</span>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function generateEncryptedHex(id, algo) {
+            // Generate consistent but random-looking hex based on id
+            let hash = 0;
+            const str = (id || '') + (algo || '');
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                hash |= 0;
+            }
+            
+            let hex = '';
+            const rand = (seed) => {
+                seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+                return seed;
+            };
+            
+            let seed = Math.abs(hash);
+            for (let i = 0; i < 48; i++) {
+                seed = rand(seed);
+                hex += (seed % 256).toString(16).padStart(2, '0').toUpperCase();
+                if ((i + 1) % 8 === 0 && i < 47) hex += ' ';
+            }
+            return hex + '...';
+        }
+        
+        async function attackPacket(idx) {
+            const packet = interceptedData[idx];
+            if (!packet) return;
+            
+            log(`⚛️ Initiating Shor's Algorithm attack on packet #${idx + 1}...`, 'warning');
+            log(`Target: ${packet.encryptionAlgorithm} encryption`, 'info');
+            log(`Loading quantum circuit (4099 qubits for RSA-2048)...`, 'info');
+            
+            try {
+                // Call the actual quantum attack API
+                const response = await fetch('/api/hacker/quantum-attack', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetId: packet.documentId || packet.id })
+                });
+                
+                const result = await response.json();
+                
+                // Simulate attack progress
+                await simulateAttackProgress();
+                
+                // Show result
+                if (result.rsaBroken > 0 || (result.results && result.results.some(r => r.decrypted))) {
+                    log(`💔 RSA-2048 BROKEN! Private key factored!`, 'success');
+                    showDecryptedData(packet, result);
+                } else {
+                    log(`Attack completed - check results panel`, 'info');
+                }
+                
+                updateStats();
+                
+            } catch (e) {
+                log(`Attack failed: ${e.message}`, 'error');
+            }
+        }
+        
+        async function attackAllVulnerable() {
+            const vulnerable = interceptedData.filter(p => 
+                p.encryptionAlgorithm && p.encryptionAlgorithm.includes('RSA'));
+            
+            if (vulnerable.length === 0) {
+                log('No RSA-vulnerable packets to attack', 'warning');
+                return;
+            }
+            
+            log(`🚀 Launching quantum attack on ${vulnerable.length} RSA packets...`, 'warning');
+            
+            try {
+                const response = await fetch('/api/hacker/quantum-attack', {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                await simulateAttackProgress();
+                
+                if (result.rsaBroken > 0) {
+                    log(`💔 ${result.rsaBroken} RSA keys BROKEN!`, 'success');
+                    showBulkDecryptedData(result);
+                }
+                
+                if (result.pqcProtected > 0) {
+                    log(`🛡️ ${result.pqcProtected} packets protected by PQC`, 'info');
+                }
+                
+                updateStats();
+                
+            } catch (e) {
+                log(`Bulk attack failed: ${e.message}`, 'error');
+            }
+        }
+        
+        async function simulateAttackProgress() {
+            const steps = [
+                'Creating quantum superposition...',
+                'Applying Hadamard gates...',
+                'Executing modular exponentiation...',
+                'Running Quantum Fourier Transform...',
+                'Measuring qubits...',
+                'Computing GCD for factors...'
+            ];
+            
+            for (const step of steps) {
+                log(`[SHOR] ${step}`, 'info');
+                await new Promise(r => setTimeout(r, 500));
+            }
+        }
+        
+        function showDecryptedData(packet, result) {
+            const panel = document.getElementById('attackResultsPanel');
+            
+            const decryptedHtml = `
+                <div class="decrypted-data">
+                    <h3>💔 DECRYPTED - ${packet.documentType || 'Document'}</h3>
+                    <div class="decrypted-field">
+                        <span class="field-label">Doc ID:</span>
+                        <span class="field-value">${packet.documentId || packet.id}</span>
+                    </div>
+                    <div class="decrypted-field">
+                        <span class="field-label">Applicant:</span>
+                        <span class="field-value">${packet.applicant || 'Unknown'}</span>
+                    </div>
+                    <div class="decrypted-field">
+                        <span class="field-label">Broken Cipher:</span>
+                        <span class="field-value">${packet.encryptionAlgorithm}</span>
+                    </div>
+                    <div class="decrypted-field">
+                        <span class="field-label">Attack Time:</span>
+                        <span class="field-value">${result.attackTimeMs || '~3000'}ms</span>
+                    </div>
+                    <p style="color: #ff6666; margin-top: 10px; font-size: 0.9em;">
+                        ⚠️ All personal data in this document is now EXPOSED!
+                    </p>
+                </div>
+            `;
+            
+            panel.innerHTML = decryptedHtml + panel.innerHTML;
+            document.getElementById('decryptedCount').textContent = 
+                parseInt(document.getElementById('decryptedCount').textContent) + 1;
+        }
+        
+        function showBulkDecryptedData(result) {
+            const panel = document.getElementById('attackResultsPanel');
+            
+            let html = '';
+            
+            if (result.results) {
+                result.results.forEach(r => {
+                    if (r.decrypted) {
+                        html += `
+                            <div class="decrypted-data">
+                                <h3>💔 DECRYPTED - ${r.documentType || 'Document'}</h3>
+                                <div class="decrypted-field">
+                                    <span class="field-label">Doc ID:</span>
+                                    <span class="field-value">${r.documentId}</span>
+                                </div>
+                                <div class="decrypted-field">
+                                    <span class="field-label">Attack:</span>
+                                    <span class="field-value">${r.attackType}</span>
+                                </div>
+                                <div class="decrypted-field">
+                                    <span class="field-label">Time:</span>
+                                    <span class="field-value">${r.attackTimeMs}ms</span>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        html += `
+                            <div class="protected-data">
+                                <h3>🛡️ PROTECTED - ${r.documentType || 'Document'}</h3>
+                                <p>Attack FAILED - ${r.algorithm} is quantum-resistant</p>
+                            </div>
+                        `;
+                    }
+                });
+            }
+            
+            panel.innerHTML = html || panel.innerHTML;
+            document.getElementById('decryptedCount').textContent = result.rsaBroken || 0;
+        }
+        
+        function updateStats() {
+            const total = interceptedData.length;
+            const vulnerable = interceptedData.filter(p => 
+                p.encryptionAlgorithm && p.encryptionAlgorithm.includes('RSA')).length;
+            const safe = total - vulnerable;
+            
+            document.getElementById('totalPackets').textContent = total;
+            document.getElementById('vulnerableCount').textContent = vulnerable;
+            document.getElementById('safeCount').textContent = safe;
+        }
+        
+        function log(message, type = 'info') {
+            const console = document.getElementById('attackConsole');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            console.appendChild(entry);
+            console.scrollTop = console.scrollHeight;
+        }
+    </script>
+</body>
+</html>

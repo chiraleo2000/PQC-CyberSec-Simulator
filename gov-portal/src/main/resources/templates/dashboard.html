@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Government Portal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f6f9;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+        }
+        .header h1 {
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .header .user-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        .header nav a {
+            color: white;
+            text-decoration: none;
+            margin-left: 15px;
+            padding: 8px 14px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .header nav a:hover { background: rgba(255,255,255,0.2); }
+        .header nav a.logout { background: #c0392b; }
+        
+        .main-content {
+            display: flex;
+            max-width: 1400px;
+            margin: 20px auto;
+            gap: 20px;
+            padding: 0 20px;
+        }
+        .sidebar {
+            width: 280px;
+            flex-shrink: 0;
+        }
+        .content {
+            flex-grow: 1;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+        .card h2 {
+            color: #1a5276;
+            margin-bottom: 20px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .service-links a {
+            display: block;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s;
+        }
+        .service-links a:hover {
+            background: #1a5276;
+            color: white;
+            transform: translateX(5px);
+        }
+        .service-links a .icon { margin-right: 10px; }
+
+        /* Alerts */
+        .alert {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+        .alert-info {
+            background: #e7f3ff;
+            color: #004085;
+            border-left: 4px solid #007bff;
+        }
+
+        /* Document Tables */
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .doc-table th, .doc-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        .doc-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #666;
+        }
+        .doc-table tr:hover { background: #f8f9fa; }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-DRAFT { background: #e9ecef; color: #495057; }
+        .status-SUBMITTED { background: #fff3cd; color: #856404; }
+        .status-APPROVED { background: #d4edda; color: #155724; }
+        .status-REJECTED { background: #f8d7da; color: #721c24; }
+        .status-SIGNED { background: #cce5ff; color: #004085; }
+
+        .encryption-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .enc-RSA_2048 { background: #f8d7da; color: #721c24; }
+        .enc-ML_KEM { background: #d4edda; color: #155724; }
+        .enc-ML_DSA { background: #d4edda; color: #155724; }
+
+        .action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            text-decoration: none;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .btn-review { background: #1a5276; color: white; }
+        .btn-approve { background: #28a745; color: white; }
+        .btn-reject { background: #dc3545; color: white; }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>
+            <span>🏛️</span>
+            Government Portal
+        </h1>
+        <div class="user-info">
+            <span class="user-badge" th:text="'👤 ' + ${user.fullName} + ' (' + ${user.role} + ')'"></span>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/logout" class="logout">Logout</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="main-content">
+        <aside class="sidebar">
+            <div class="card">
+                <h2>🚀 Quick Services</h2>
+                <div class="service-links">
+                    <a href="/services/car-license">
+                        <span class="icon">🚗</span> Car License Application
+                    </a>
+                    <a href="/services/tax-filing">
+                        <span class="icon">💰</span> Tax Filing
+                    </a>
+                    <a href="/services/passport">
+                        <span class="icon">🛂</span> Passport Services
+                    </a>
+                    <a href="/services/permits">
+                        <span class="icon">📋</span> Permits
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🔐 Security Info</h2>
+                <p style="color: #666; font-size: 14px; line-height: 1.6;">
+                    Your data is protected with <strong>Post-Quantum Cryptography</strong>.
+                    Choose <span style="color: #28a745; font-weight: bold;">ML-KEM</span> for 
+                    quantum-resistant encryption.
+                </p>
+            </div>
+        </aside>
+
+        <main class="content">
+            <!-- Success/Error Messages -->
+            <div th:if="${success}" class="alert alert-success">
+                <span>✅</span>
+                <span th:text="${success}"></span>
+            </div>
+            <div th:if="${error}" class="alert alert-error">
+                <span>❌</span>
+                <span th:text="${error}"></span>
+            </div>
+            <div th:if="${encryptionUsed}" class="alert alert-info">
+                <span>🔐</span>
+                <span>Document encrypted with: <strong th:text="${encryptionUsed}"></strong></span>
+                <span th:if="${encryptionUsed == 'RSA_2048'}" style="color: #c00;"> ⚠️ (Vulnerable to Quantum)</span>
+                <span th:if="${encryptionUsed == 'ML_KEM'}" style="color: #28a745;"> ✅ (Quantum Safe)</span>
+            </div>
+
+            <!-- Officer: Pending Documents -->
+            <div th:if="${pendingDocuments != null && !pendingDocuments.empty}" class="card">
+                <h2>⏳ Pending Applications (Officer Review)</h2>
+                <table class="doc-table">
+                    <thead>
+                        <tr>
+                            <th>Document ID</th>
+                            <th>Type</th>
+                            <th>Applicant</th>
+                            <th>Encryption</th>
+                            <th>Submitted</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="doc : ${pendingDocuments}">
+                            <td th:text="${doc.documentId}"></td>
+                            <td th:text="${doc.documentType.displayName}"></td>
+                            <td th:text="${doc.applicant.fullName}"></td>
+                            <td>
+                                <span class="encryption-badge" 
+                                      th:classappend="'enc-' + ${doc.signatureAlgorithm}"
+                                      th:text="${doc.signatureAlgorithm}"></span>
+                            </td>
+                            <td th:text="${#temporals.format(doc.createdAt, 'MMM dd, HH:mm')}"></td>
+                            <td>
+                                <a th:href="@{'/officer/review/' + ${doc.documentId}}" class="action-btn btn-review">📋 Review</a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- My Documents -->
+            <div class="card">
+                <h2>📄 My Applications</h2>
+                <div th:if="${myDocuments == null || myDocuments.empty}" class="empty-state">
+                    <div class="icon">📭</div>
+                    <p>No applications yet. Start by submitting a new application!</p>
+                </div>
+                <table th:if="${myDocuments != null && !myDocuments.empty}" class="doc-table">
+                    <thead>
+                        <tr>
+                            <th>Document ID</th>
+                            <th>Type</th>
+                            <th>Title</th>
+                            <th>Encryption</th>
+                            <th>Status</th>
+                            <th>Submitted</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="doc : ${myDocuments}">
+                            <td th:text="${doc.documentId}"></td>
+                            <td th:text="${doc.documentType.displayName}"></td>
+                            <td th:text="${doc.title}"></td>
+                            <td>
+                                <span class="encryption-badge" 
+                                      th:classappend="'enc-' + ${doc.signatureAlgorithm}"
+                                      th:text="${doc.signatureAlgorithm}"></span>
+                            </td>
+                            <td>
+                                <span class="status-badge" 
+                                      th:classappend="'status-' + ${doc.status}"
+                                      th:text="${doc.status}"></span>
+                            </td>
+                            <td th:text="${#temporals.format(doc.createdAt, 'MMM dd, yyyy HH:mm')}"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

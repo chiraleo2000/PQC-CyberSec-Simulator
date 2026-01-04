@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Government Portal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .login-header .logo { font-size: 60px; }
+        .login-header h1 {
+            color: #1a5276;
+            margin-top: 10px;
+        }
+        .login-header p {
+            color: #666;
+            margin-top: 5px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus {
+            border-color: #1a5276;
+            outline: none;
+        }
+        .btn-login {
+            width: 100%;
+            padding: 15px;
+            background: #1a5276;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn-login:hover { background: #2980b9; }
+        .demo-accounts {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .demo-accounts h3 {
+            color: #1a5276;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        .demo-account {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .demo-account:last-child { border-bottom: none; }
+        .demo-account .role {
+            font-weight: bold;
+            color: #333;
+        }
+        .demo-account .credentials {
+            font-size: 13px;
+            color: #666;
+        }
+        .demo-account button {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .demo-account button:hover { background: #219a52; }
+        .alert {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .alert-error {
+            background: #fee;
+            color: #c00;
+            border: 1px solid #fcc;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .back-link a {
+            color: #1a5276;
+            text-decoration: none;
+        }
+        .back-link a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div class="logo">🏛️</div>
+            <h1>Government Portal</h1>
+            <p>Secure Login</p>
+        </div>
+
+        <div th:if="${error}" class="alert alert-error" th:text="${error}"></div>
+
+        <form method="POST" action="/login">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required placeholder="Enter your username">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required placeholder="Enter your password">
+            </div>
+
+            <button type="submit" class="btn-login">🔐 Login</button>
+        </form>
+
+        <div class="demo-accounts">
+            <h3>📋 Demo Accounts (Click to Auto-Fill)</h3>
+            
+            <div class="demo-account">
+                <div>
+                    <div class="role">👨‍💼 Officer</div>
+                    <div class="credentials">officer / Officer@2024!</div>
+                </div>
+                <button onclick="fillLogin('officer', 'Officer@2024!')">Use</button>
+            </div>
+            
+            <div class="demo-account">
+                <div>
+                    <div class="role">👤 Citizen (John)</div>
+                    <div class="credentials">john.citizen / Citizen@2024!</div>
+                </div>
+                <button onclick="fillLogin('john.citizen', 'Citizen@2024!')">Use</button>
+            </div>
+            
+            <div class="demo-account">
+                <div>
+                    <div class="role">👤 Citizen (Emily)</div>
+                    <div class="credentials">emily.chen / Citizen@2024!</div>
+                </div>
+                <button onclick="fillLogin('emily.chen', 'Citizen@2024!')">Use</button>
+            </div>
+
+            <div class="demo-account">
+                <div>
+                    <div class="role">👑 Admin</div>
+                    <div class="credentials">admin / Admin@PQC2024!</div>
+                </div>
+                <button onclick="fillLogin('admin', 'Admin@PQC2024!')">Use</button>
+            </div>
+        </div>
+
+        <div class="back-link">
+            <a href="/">← Back to Home</a>
+        </div>
+    </div>
+
+    <script>
+        function fillLogin(username, password) {
+            document.getElementById('username').value = username;
+            document.getElementById('password').value = password;
+        }
+    </script>
+</body>
+</html>

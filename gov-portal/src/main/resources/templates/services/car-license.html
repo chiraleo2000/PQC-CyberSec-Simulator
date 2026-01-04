@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car License Application - Government Portal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f6f9;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+        }
+        .header h1 { font-size: 22px; }
+        .header nav a {
+            color: white;
+            text-decoration: none;
+            margin-left: 15px;
+            padding: 8px 14px;
+            border-radius: 5px;
+        }
+        .header nav a:hover { background: rgba(255,255,255,0.2); }
+
+        .form-container {
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 35px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+        .card h2 {
+            color: #1a5276;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .form-section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .form-section:last-child { border-bottom: none; }
+        .form-section h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            border-color: #1a5276;
+            outline: none;
+        }
+
+        .encryption-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .encryption-option {
+            padding: 20px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .encryption-option:hover { border-color: #1a5276; }
+        .encryption-option.selected {
+            border-color: #1a5276;
+            background: #f0f7ff;
+        }
+        .encryption-option input { display: none; }
+        .encryption-option .name {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .encryption-option .description {
+            font-size: 13px;
+            color: #666;
+        }
+        .encryption-option.vulnerable .name { color: #c0392b; }
+        .encryption-option.secure .name { color: #27ae60; }
+
+        .warning-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            display: none;
+        }
+        .warning-box.show { display: block; }
+        .warning-box p {
+            color: #856404;
+            font-size: 14px;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 16px;
+            background: #1a5276;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 20px;
+        }
+        .btn-submit:hover { background: #2980b9; }
+
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .back-link a {
+            color: #1a5276;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>🏛️ Government Portal</h1>
+        <nav>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+
+    <div class="form-container">
+        <div class="card">
+            <h2>🚗 Car License Application</h2>
+            <p class="subtitle">Apply for a new driver's license or vehicle registration</p>
+
+            <form method="POST" action="/services/car-license/submit" id="licenseForm">
+                
+                <div class="form-section">
+                    <h3>👤 Personal Information</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="fullName">Full Name *</label>
+                            <input type="text" id="fullName" name="fullName" required 
+                                   th:value="${user.fullName}" placeholder="John Smith">
+                        </div>
+                        <div class="form-group">
+                            <label for="dob">Date of Birth *</label>
+                            <input type="date" id="dob" name="dob" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="address">Home Address *</label>
+                        <input type="text" id="address" name="address" required 
+                               placeholder="123 Main Street, City, State 12345">
+                    </div>
+                    <div class="form-group">
+                        <label for="licenseType">License Type *</label>
+                        <select id="licenseType" name="licenseType" required>
+                            <option value="">-- Select License Type --</option>
+                            <option value="Class A - Motorcycle">Class A - Motorcycle</option>
+                            <option value="Class B - Standard Vehicle">Class B - Standard Vehicle</option>
+                            <option value="Class C - Commercial">Class C - Commercial Vehicle</option>
+                            <option value="Class D - Heavy Vehicle">Class D - Heavy Vehicle</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>🚙 Vehicle Information</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="vehiclePlate">License Plate Number *</label>
+                            <input type="text" id="vehiclePlate" name="vehiclePlate" required 
+                                   placeholder="ABC-1234" style="text-transform: uppercase;">
+                        </div>
+                        <div class="form-group">
+                            <label for="vehicleMake">Vehicle Make & Model *</label>
+                            <input type="text" id="vehicleMake" name="vehicleMake" required 
+                                   placeholder="Toyota Camry">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="vehicleYear">Vehicle Year *</label>
+                        <select id="vehicleYear" name="vehicleYear" required>
+                            <option value="">-- Select Year --</option>
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                            <option value="2022">2022</option>
+                            <option value="2021">2021</option>
+                            <option value="2020">2020</option>
+                            <option value="2019">2019</option>
+                            <option value="2018">2018</option>
+                            <option value="Older">Older</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>🔐 Encryption Method</h3>
+                    <p style="color: #666; margin-bottom: 15px;">
+                        Choose how your sensitive data will be encrypted during transmission:
+                    </p>
+                    
+                    <div class="encryption-options">
+                        <label class="encryption-option vulnerable" onclick="selectEncryption(this, 'RSA_2048')">
+                            <input type="radio" name="encryptionType" value="RSA_2048" checked>
+                            <div class="name">⚠️ RSA-2048 (Classical)</div>
+                            <div class="description">
+                                Traditional encryption. Vulnerable to future quantum attacks.
+                                May be broken by 2030-2035.
+                            </div>
+                        </label>
+                        
+                        <label class="encryption-option secure" onclick="selectEncryption(this, 'ML_KEM')">
+                            <input type="radio" name="encryptionType" value="ML_KEM">
+                            <div class="name">✅ ML-KEM (Quantum-Safe)</div>
+                            <div class="description">
+                                NIST FIPS 203 approved. Protected against quantum computers.
+                                Recommended for sensitive data.
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="warning-box" id="rsaWarning">
+                        <p>⚠️ <strong>Warning:</strong> RSA-2048 encrypted data can be harvested now and 
+                        decrypted later when quantum computers become available ("Harvest Now, Decrypt Later" attack).
+                        Your personal data may be at risk in 5-10 years.</p>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit">📤 Submit Application</button>
+            </form>
+
+            <div class="back-link">
+                <a href="/dashboard">← Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function selectEncryption(element, value) {
+            document.querySelectorAll('.encryption-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            element.querySelector('input').checked = true;
+            
+            // Show warning for RSA
+            const warning = document.getElementById('rsaWarning');
+            if (value === 'RSA_2048') {
+                warning.classList.add('show');
+            } else {
+                warning.classList.remove('show');
+            }
+        }
+        
+        // Initialize
+        document.querySelector('.encryption-option.vulnerable').classList.add('selected');
+        document.getElementById('rsaWarning').classList.add('show');
+    </script>
+</body>
+</html>

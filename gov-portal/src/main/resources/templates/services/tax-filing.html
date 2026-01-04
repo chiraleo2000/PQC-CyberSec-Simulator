@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tax Filing - Government Portal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f6f9;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+        }
+        .header h1 { font-size: 22px; }
+        .header nav a {
+            color: white;
+            text-decoration: none;
+            margin-left: 15px;
+            padding: 8px 14px;
+            border-radius: 5px;
+        }
+        .header nav a:hover { background: rgba(255,255,255,0.2); }
+
+        .form-container {
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 35px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+        .card h2 {
+            color: #1a5276;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .form-section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .form-section:last-child { border-bottom: none; }
+        .form-section h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            border-color: #1a5276;
+            outline: none;
+        }
+        .form-group .input-prefix {
+            position: relative;
+        }
+        .form-group .input-prefix input {
+            padding-left: 30px;
+        }
+        .form-group .input-prefix::before {
+            content: '$';
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            font-weight: bold;
+        }
+
+        .encryption-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .encryption-option {
+            padding: 20px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .encryption-option:hover { border-color: #1a5276; }
+        .encryption-option.selected {
+            border-color: #1a5276;
+            background: #f0f7ff;
+        }
+        .encryption-option input { display: none; }
+        .encryption-option .name {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .encryption-option .description {
+            font-size: 13px;
+            color: #666;
+        }
+        .encryption-option.vulnerable .name { color: #c0392b; }
+        .encryption-option.secure .name { color: #27ae60; }
+
+        .warning-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            display: none;
+        }
+        .warning-box.show { display: block; }
+        .warning-box p {
+            color: #856404;
+            font-size: 14px;
+        }
+
+        .sensitive-notice {
+            background: #e7f3ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sensitive-notice p {
+            color: #004085;
+            font-size: 14px;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 16px;
+            background: #1a5276;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 20px;
+        }
+        .btn-submit:hover { background: #2980b9; }
+
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .back-link a {
+            color: #1a5276;
+            text-decoration: none;
+        }
+
+        .tax-summary {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .tax-summary h4 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .tax-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .tax-row:last-child { border-bottom: none; }
+        .tax-row.total {
+            font-weight: bold;
+            font-size: 18px;
+            padding-top: 15px;
+            border-top: 2px solid #1a5276;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>🏛️ Government Portal</h1>
+        <nav>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+
+    <div class="form-container">
+        <div class="card">
+            <h2>💰 Tax Filing</h2>
+            <p class="subtitle">Submit your annual tax documents securely</p>
+
+            <div class="sensitive-notice">
+                <span style="font-size: 24px;">🔒</span>
+                <p><strong>Sensitive Financial Data:</strong> Your tax information includes SSN, income, 
+                and bank details. We strongly recommend using quantum-safe encryption.</p>
+            </div>
+
+            <form method="POST" action="/services/tax-filing/submit" id="taxForm">
+                
+                <div class="form-section">
+                    <h3>👤 Taxpayer Information</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="fullName">Full Legal Name *</label>
+                            <input type="text" id="fullName" name="fullName" required 
+                                   th:value="${user.fullName}" placeholder="John Michael Smith">
+                        </div>
+                        <div class="form-group">
+                            <label for="taxId">Tax ID / SSN *</label>
+                            <input type="text" id="taxId" name="taxId" required 
+                                   placeholder="XXX-XX-XXXX" maxlength="11"
+                                   pattern="\d{3}-\d{2}-\d{4}">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="filingYear">Filing Year *</label>
+                        <select id="filingYear" name="filingYear" required>
+                            <option value="">-- Select Year --</option>
+                            <option value="2024" selected>2024</option>
+                            <option value="2023">2023</option>
+                            <option value="2022">2022</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>💵 Financial Information</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="grossIncome">Gross Annual Income *</label>
+                            <div class="input-prefix">
+                                <input type="number" id="grossIncome" name="grossIncome" required 
+                                       placeholder="125000" min="0" step="0.01" 
+                                       oninput="calculateTax()">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="deductions">Total Deductions</label>
+                            <div class="input-prefix">
+                                <input type="number" id="deductions" name="deductions" 
+                                       placeholder="15000" min="0" step="0.01" value="0"
+                                       oninput="calculateTax()">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="taxOwed">Estimated Tax Owed *</label>
+                        <div class="input-prefix">
+                            <input type="number" id="taxOwed" name="taxOwed" required 
+                                   placeholder="28750" min="0" step="0.01" readonly>
+                        </div>
+                    </div>
+
+                    <div class="tax-summary" id="taxSummary" style="display: none;">
+                        <h4>📊 Tax Calculation Summary</h4>
+                        <div class="tax-row">
+                            <span>Gross Income:</span>
+                            <span id="sumIncome">$0.00</span>
+                        </div>
+                        <div class="tax-row">
+                            <span>Deductions:</span>
+                            <span id="sumDeductions">-$0.00</span>
+                        </div>
+                        <div class="tax-row">
+                            <span>Taxable Income:</span>
+                            <span id="sumTaxable">$0.00</span>
+                        </div>
+                        <div class="tax-row total">
+                            <span>Estimated Tax (23%):</span>
+                            <span id="sumTax">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>🏦 Bank Account (for Refund)</h3>
+                    <div class="form-group">
+                        <label for="bankAccount">Bank Account Number *</label>
+                        <input type="text" id="bankAccount" name="bankAccount" required 
+                               placeholder="**** **** **** 4521" maxlength="20">
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>🔐 Encryption Method</h3>
+                    <p style="color: #666; margin-bottom: 15px;">
+                        <strong>⚠️ Tax data contains highly sensitive financial information.</strong>
+                        Choose your encryption carefully:
+                    </p>
+                    
+                    <div class="encryption-options">
+                        <label class="encryption-option vulnerable" onclick="selectEncryption(this, 'RSA_2048')">
+                            <input type="radio" name="encryptionType" value="RSA_2048">
+                            <div class="name">⚠️ RSA-2048 (Classical)</div>
+                            <div class="description">
+                                <strong>NOT RECOMMENDED for financial data.</strong>
+                                Vulnerable to quantum attacks.
+                            </div>
+                        </label>
+                        
+                        <label class="encryption-option secure selected" onclick="selectEncryption(this, 'ML_KEM')">
+                            <input type="radio" name="encryptionType" value="ML_KEM" checked>
+                            <div class="name">✅ ML-KEM (Quantum-Safe)</div>
+                            <div class="description">
+                                <strong>RECOMMENDED.</strong>
+                                NIST approved, protects against HNDL attacks.
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="warning-box" id="rsaWarning">
+                        <p>⚠️ <strong>HIGH RISK:</strong> Your SSN, income, and bank account details 
+                        will be encrypted with RSA-2048. This data can be harvested and decrypted 
+                        when quantum computers are available (estimated 2030-2035). 
+                        <strong>We strongly advise using ML-KEM-768 for financial data.</strong></p>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit">📤 Submit Tax Filing</button>
+            </form>
+
+            <div class="back-link">
+                <a href="/dashboard">← Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function selectEncryption(element, value) {
+            document.querySelectorAll('.encryption-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            element.querySelector('input').checked = true;
+            
+            const warning = document.getElementById('rsaWarning');
+            if (value === 'RSA_2048') {
+                warning.classList.add('show');
+            } else {
+                warning.classList.remove('show');
+            }
+        }
+
+        function calculateTax() {
+            const income = parseFloat(document.getElementById('grossIncome').value) || 0;
+            const deductions = parseFloat(document.getElementById('deductions').value) || 0;
+            const taxable = Math.max(0, income - deductions);
+            const tax = taxable * 0.23; // 23% tax rate
+
+            document.getElementById('taxOwed').value = tax.toFixed(2);
+            
+            // Update summary
+            document.getElementById('sumIncome').textContent = '$' + income.toLocaleString('en-US', {minimumFractionDigits: 2});
+            document.getElementById('sumDeductions').textContent = '-$' + deductions.toLocaleString('en-US', {minimumFractionDigits: 2});
+            document.getElementById('sumTaxable').textContent = '$' + taxable.toLocaleString('en-US', {minimumFractionDigits: 2});
+            document.getElementById('sumTax').textContent = '$' + tax.toLocaleString('en-US', {minimumFractionDigits: 2});
+            
+            document.getElementById('taxSummary').style.display = income > 0 ? 'block' : 'none';
+        }
+
+        // Format SSN input
+        document.getElementById('taxId').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 3 && value.length <= 5) {
+                value = value.slice(0,3) + '-' + value.slice(3);
+            } else if (value.length > 5) {
+                value = value.slice(0,3) + '-' + value.slice(3,5) + '-' + value.slice(5,9);
+            }
+            e.target.value = value;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# cuQuantum Python Service Dependencies
+# Requires NVIDIA CUDA Toolkit 12.x/13.x and cuQuantum SDK
+
+# Core quantum simulation - Use CUDA 11.x for better compatibility
+# cuquantum-python-cu12>=24.03.0
+# cupy-cuda12x>=13.0.0
+
+# Alternative: Use cupy with prebuilt wheels (more compatible)
+cupy-cuda12x>=13.3.0
+
+# Web service
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Math and utilities
+numpy>=1.26.0
+scipy>=1.12.0
+
+# For Shor's algorithm implementation
+sympy>=1.12
+
+# HTTP client
+requests>=2.31.0

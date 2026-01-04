@@ -1,7 +1,31 @@
 version: '3.8'
 
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PQC CyberSec Simulator - Docker Compose
+# ═══════════════════════════════════════════════════════════════════════════════
+#  
+#  This Docker Compose runs ONLY the legitimate government services.
+#  The Hacker Console runs LOCALLY (outside Docker) to simulate external attacker.
+#
+#  Quick Start:
+#    docker-compose up -d
+#
+#  Services:
+#    - PostgreSQL:       localhost:5432
+#    - Government Portal: localhost:8181  (Web UI + API)
+#    - Secure Messaging:  localhost:8182  (API only)
+#    - pgAdmin:          localhost:5050  (optional DB admin)
+#
+#  Hacker Console (run separately):
+#    cd hacker-console
+#    mvn spring-boot:run -Dspring-boot.run.profiles=standalone
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
 services:
-  # PostgreSQL Database
+  # ═══════════════════════════════════════════════════════════════
+  #  DATABASE: PostgreSQL 16
+  # ═══════════════════════════════════════════════════════════════
   postgres:
     image: postgres:16-alpine
     container_name: pqc-postgres
@@ -22,12 +46,30 @@ services:
     networks:
       - pqc-network
 
-  # Service 1: User & Document Service
-  user-document-service:
+  # ═══════════════════════════════════════════════════════════════
+  #  SERVICE 1: Government Portal (Web UI + API)
+  # ═══════════════════════════════════════════════════════════════
+  #
+  #  Features:
+  #    - User registration & login
+  #    - Car License application forms
+  #    - Tax Filing forms
+  #    - Officer document approval
+  #    - PQC & Classical encryption options
+  #
+  #  Web UI: http://localhost:8181
+  #
+  #  Demo Accounts:
+  #    - admin / Admin@PQC2024!
+  #    - officer / Officer@2024!
+  #    - john.citizen / Citizen@2024!
+  #    - emily.chen / Citizen@2024!
+  #
+  gov-portal:
     build:
       context: .
-      dockerfile: pqc-user-document-service/Dockerfile
-    container_name: pqc-user-document
+      dockerfile: gov-portal/Dockerfile
+    container_name: gov-portal
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pqc_cybersec
@@ -35,7 +77,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: PqcSecure2024!
       JWT_SECRET: PqcJwtSecretKey2024ForQuantumResistantSecurity!
     ports:
-      - "8081:8081"
+      - "8181:8181"
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,50 +85,42 @@ services:
       - pqc-network
     restart: unless-stopped
 
-  # Service 2: Messaging Service
-  messaging-service:
+  # ═══════════════════════════════════════════════════════════════
+  #  SERVICE 2: Secure Messaging Service (API)
+  # ═══════════════════════════════════════════════════════════════
+  #
+  #  Features:
+  #    - Encrypted messaging between users
+  #    - ML-KEM-768 key encapsulation
+  #    - RSA-2048 fallback option
+  #
+  #  API: http://localhost:8182
+  #
+  secure-messaging:
     build:
       context: .
-      dockerfile: pqc-messaging-service/Dockerfile
-    container_name: pqc-messaging
+      dockerfile: secure-messaging/Dockerfile
+    container_name: secure-messaging
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pqc_cybersec
       SPRING_DATASOURCE_USERNAME: pqc_admin
       SPRING_DATASOURCE_PASSWORD: PqcSecure2024!
-      USER_SERVICE_URL: http://user-document-service:8081
+      USER_SERVICE_URL: http://gov-portal:8181
     ports:
-      - "8082:8082"
+      - "8182:8182"
     depends_on:
       postgres:
         condition: service_healthy
-      user-document-service:
+      gov-portal:
         condition: service_started
     networks:
       - pqc-network
     restart: unless-stopped
 
-  # Service 3: Hacker Simulation
-  hacker-simulation:
-    build:
-      context: .
-      dockerfile: pqc-hacker-simulation/Dockerfile
-    container_name: pqc-hacker
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      USER_SERVICE_URL: http://user-document-service:8081
-      MESSAGING_SERVICE_URL: http://messaging-service:8082
-      IBM_QUANTUM_TOKEN: ${IBM_QUANTUM_TOKEN:-demo-mode}
-    ports:
-      - "8083:8083"
-    depends_on:
-      - user-document-service
-      - messaging-service
-    networks:
-      - pqc-network
-    restart: unless-stopped
-
-  # pgAdmin for database management (optional)
+  # ═══════════════════════════════════════════════════════════════
+  #  pgAdmin (Optional - Database Management)
+  # ═══════════════════════════════════════════════════════════════
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: pqc-pgadmin
@@ -100,10 +134,35 @@ services:
     networks:
       - pqc-network
     restart: unless-stopped
+    profiles:
+      - tools
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  HACKER CONSOLE - RUNS LOCALLY (NOT IN DOCKER)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+#  The Hacker Console intentionally runs OUTSIDE Docker to simulate:
+#    ✓ External threat actor (realistic attack scenario)
+#    ✓ Network-level interception
+#    ✓ "Harvest Now, Decrypt Later" (HNDL) attacks
+#    ✓ Quantum computer access simulation
+#
+#  To run the Hacker Console:
+#
+#    Option 1: Use the batch script
+#      start-hacker-standalone.bat     (Windows)
+#      ./start-hacker-standalone.sh    (Linux/Mac)
+#
+#    Option 2: Run manually
+#      cd hacker-console
+#      mvn spring-boot:run -Dspring-boot.run.profiles=standalone
+#
+#  Hacker Console URL: http://localhost:8083
+#
+# ═══════════════════════════════════════════════════════════════════════════════
 
 volumes:
   postgres_data:
-
 
 networks:
   pqc-network:

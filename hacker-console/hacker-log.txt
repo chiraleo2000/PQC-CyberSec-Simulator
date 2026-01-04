@@ -1,0 +1,142 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -----------------------< com.pqc:hacker-console >-----------------------
+[INFO] Building Hacker Console - Quantum Attack Simulator 1.0.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] >>> spring-boot:3.5.0:run (default-cli) > test-compile @ hacker-console >>>
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ hacker-console ---
+[INFO] Copying 3 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ hacker-console ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ hacker-console ---
+[INFO] Copying 1 resource from src\test\resources to target\test-classes
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ hacker-console ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 1 source file with javac [debug parameters target 21] to target\test-classes
+[INFO] 
+[INFO] <<< spring-boot:3.5.0:run (default-cli) < test-compile @ hacker-console <<<
+[INFO] 
+[INFO] 
+[INFO] --- spring-boot:3.5.0:run (default-cli) @ hacker-console ---
+[INFO] Attaching agents: []
+
+?????????????????????????????????????????????????????????????????
+?     ??  PQC HACKER SIMULATION - EDUCATIONAL ONLY  ??          ?
+?????????????????????????????????????????????????????????????????
+?                                                               ?
+?  This service demonstrates quantum computing threats:         ?
+?  ò Network interception (HNDL)                               ?
+?  ò Shor's algorithm (RSA breaking)                           ?
+?  ò Grover's algorithm (AES weakening)                        ?
+?                                                               ?
+?  Configure quantum provider API keys for real execution:      ?
+?  ò IBM_QUANTUM_TOKEN - IBM Qiskit Runtime                    ?
+?  ò IONQ_API_KEY - IonQ Quantum Computer                      ?
+?  ò AZURE_QUANTUM_KEY - Azure Quantum                         ?
+?                                                               ?
+?  Without API keys, attacks run in LOCAL SIMULATION mode.      ?
+?                                                               ?
+?????????????????????????????????????????????????????????????????
+
+
+
+?????????????????????????????????????????????????????????????????
+?     ??  PQC HACKER SIMULATION - EDUCATIONAL ONLY  ??          ?
+?????????????????????????????????????????????????????????????????
+?                                                               ?
+?  This service demonstrates quantum computing threats:         ?
+?  ò Network interception (HNDL)                               ?
+?  ò Shor's algorithm (RSA breaking)                           ?
+?  ò Grover's algorithm (AES weakening)                        ?
+?                                                               ?
+?  Configure quantum provider API keys for real execution:      ?
+?  ò IBM_QUANTUM_TOKEN - IBM Qiskit Runtime                    ?
+?  ò IONQ_API_KEY - IonQ Quantum Computer                      ?
+?  ò AZURE_QUANTUM_KEY - Azure Quantum                         ?
+?                                                               ?
+?  Without API keys, attacks run in LOCAL SIMULATION mode.      ?
+?                                                               ?
+?????????????????????????????????????????????????????????????????
+
+
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.0)
+
+16:44:42 [restartedMain] INFO  c.p.h.HackerSimulationApplication - Starting HackerSimulationApplication using Java 21.0.3 with PID 14424 (C:\Users\chira\Documents\visualstudiocode\SideProjects\PQC-CyberSec-Simulator\hacker-console\target\classes started by chira in C:\Users\chira\Documents\visualstudiocode\SideProjects\PQC-CyberSec-Simulator\hacker-console)
+16:44:42 [restartedMain] DEBUG c.p.h.HackerSimulationApplication - Running with Spring Boot v3.5.0, Spring v6.2.7
+16:44:42 [restartedMain] INFO  c.p.h.HackerSimulationApplication - The following 1 profile is active: "standalone"
+16:44:42 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+16:44:42 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+16:44:43 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+16:44:43 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 48 ms. Found 2 JPA repository interfaces.
+16:44:43 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8183 (http)
+16:44:43 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+16:44:43 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.41]
+16:44:43 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+16:44:43 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1324 ms
+16:44:43 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+16:44:43 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.6.15.Final
+16:44:43 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+16:44:44 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+16:44:44 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+16:44:44 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection conn0: url=jdbc:h2:file:./hacker-data/harvested_data user=HACKER
+16:44:44 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+16:44:44 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+16:44:44 [restartedMain] INFO  o.hibernate.orm.connections.pooling - HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 2.3.232
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+16:44:44 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+16:44:45 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+16:44:45 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+16:44:45 [restartedMain] INFO  c.p.h.quantum.CuQuantumGpuSimulator - ΓÜ¢∩╕Å cuQuantum GPU Simulator initialized - GPU: NVIDIA GeForce RTX 4060 Laptop GPU (8188 MB VRAM)
+16:44:45 [restartedMain] WARN  c.p.h.intercept.TransactionHarvester - ≡ƒò╡∩╕Å Transaction Harvester initialized - targeting http://localhost:8181 and http://localhost:8182
+16:44:45 [restartedMain] WARN  c.p.h.quantum.PythonQuantumClient - ΓÜá∩╕Å Python cuQuantum service not available at http://localhost:8184. Using Java simulation fallback.
+16:44:45 [restartedMain] WARN  c.p.h.i.EncryptedDataHarvester - ≡ƒò╡∩╕Å Encrypted Data Harvester initialized - targeting null and null
+16:44:45 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+16:44:46 [restartedMain] INFO  o.s.b.a.h.H2ConsoleAutoConfiguration - H2 console available at '/h2-console'. Database available at 'jdbc:h2:file:./hacker-data/harvested_data'
+16:44:46 [restartedMain] WARN  o.s.b.d.a.OptionalLiveReloadServer - Unable to start LiveReload server
+16:44:46 [restartedMain] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+16:44:46 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+16:44:46 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+16:44:46 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+16:44:46 [restartedMain] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+16:44:46 [restartedMain] ERROR o.s.b.d.LoggingFailureAnalysisReporter - 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Web server failed to start. Port 8183 was already in use.
+
+Action:
+
+Identify and stop the process that's listening on port 8183 or configure this application to listen on another port.
+
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  8.844 s
+[INFO] Finished at: 2026-01-01T16:44:46+07:00
+[INFO] ------------------------------------------------------------------------

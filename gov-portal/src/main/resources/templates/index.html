@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Government Portal - PQC Secure Services</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .header {
+            background: rgba(0,0,0,0.2);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+        }
+        .header h1 {
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header .logo { font-size: 32px; }
+        .header nav a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+            padding: 8px 16px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .header nav a:hover { background: rgba(255,255,255,0.2); }
+        .header nav a.btn-login {
+            background: #27ae60;
+        }
+        .hero {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+        .hero h2 {
+            font-size: 42px;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .hero p {
+            font-size: 20px;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto 30px;
+        }
+        .services {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            padding: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .service-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .service-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .service-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        .service-card h3 {
+            color: #1a5276;
+            margin-bottom: 10px;
+            font-size: 22px;
+        }
+        .service-card p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .service-card a {
+            display: inline-block;
+            background: #1a5276;
+            color: white;
+            padding: 12px 25px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        .service-card a:hover { background: #2980b9; }
+        .security-badge {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            text-align: center;
+            color: white;
+        }
+        .security-badge p {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+        .pqc-badge {
+            background: #27ae60;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        footer {
+            background: rgba(0,0,0,0.3);
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>
+            <span class="logo">🏛️</span>
+            Government Portal
+        </h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/services/car-license">Car License</a>
+            <a href="/services/tax-filing">Tax Filing</a>
+            <th:block th:if="${user != null}">
+                <a href="/dashboard">Dashboard</a>
+                <a href="/logout">Logout</a>
+            </th:block>
+            <th:block th:if="${user == null}">
+                <a href="/login" class="btn-login">Login</a>
+            </th:block>
+        </nav>
+    </header>
+
+    <section class="hero">
+        <h2>🔐 Secure Digital Government Services</h2>
+        <p>Submit applications, file taxes, and access government services with quantum-resistant encryption</p>
+    </section>
+
+    <section class="services">
+        <div class="service-card">
+            <div class="service-icon">🚗</div>
+            <h3>Car License</h3>
+            <p>Apply for new driver's license, renewals, or vehicle registration</p>
+            <a href="/services/car-license">Apply Now</a>
+        </div>
+
+        <div class="service-card">
+            <div class="service-icon">💰</div>
+            <h3>Tax Filing</h3>
+            <p>Submit your annual tax documents securely online</p>
+            <a href="/services/tax-filing">File Taxes</a>
+        </div>
+
+        <div class="service-card">
+            <div class="service-icon">🛂</div>
+            <h3>Passport Services</h3>
+            <p>Apply for new passport or renewal applications</p>
+            <a href="/services/passport">Apply</a>
+        </div>
+
+        <div class="service-card">
+            <div class="service-icon">📋</div>
+            <h3>Permits & Licenses</h3>
+            <p>Business permits, building permits, and more</p>
+            <a href="/services/permits">Browse</a>
+        </div>
+    </section>
+
+    <div class="security-badge">
+        <p>
+            🔒 Protected by <span class="pqc-badge">ML-KEM-768</span> Post-Quantum Cryptography
+            | NIST FIPS 203/204 Compliant
+        </p>
+    </div>
+
+    <footer>
+        <p>© 2024 Government Portal - PQC CyberSec Simulator | Educational Demo</p>
+    </footer>
+</body>
+</html>

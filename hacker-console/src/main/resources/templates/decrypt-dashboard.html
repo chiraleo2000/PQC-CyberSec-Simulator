@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚛️ Quantum Decryption Console</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #2a0a3e 50%, #0a0a0a 100%);
+            color: #00ff00;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.9);
+            border-bottom: 2px solid #9900ff;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            color: #9900ff;
+            font-size: 1.2em;
+            text-shadow: 0 0 10px #9900ff;
+        }
+        
+        .gpu-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85em;
+            color: #00ccff;
+        }
+        
+        .gpu-indicator {
+            width: 8px;
+            height: 8px;
+            background: #00ff00;
+            border-radius: 50%;
+            animation: gpuPulse 2s infinite;
+        }
+        
+        @keyframes gpuPulse {
+            0%, 100% { box-shadow: 0 0 5px #00ff00; }
+            50% { box-shadow: 0 0 15px #00ff00, 0 0 30px #00ff00; }
+        }
+        
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            padding: 8px 15px;
+            background: rgba(0, 0, 0, 0.7);
+            border-bottom: 1px solid #333;
+            font-size: 0.85em;
+        }
+        
+        .stat { display: flex; gap: 5px; }
+        .stat-value { color: #9900ff; font-weight: bold; }
+        .stat-value.success { color: #00ff00; }
+        .stat-value.fail { color: #ff0040; }
+        
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            padding: 15px;
+            height: calc(100vh - 90px);
+        }
+        
+        .panel {
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .panel-header {
+            padding: 10px 15px;
+            background: linear-gradient(90deg, #1a1a3e, #2a1a4e);
+            border-bottom: 1px solid #444;
+            font-size: 1em;
+            color: #9900ff;
+        }
+        
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        /* Queue item styles */
+        .queue-item {
+            background: rgba(20, 20, 40, 0.8);
+            border: 1px solid #333;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+        
+        .queue-item.processing {
+            border-color: #9900ff;
+            box-shadow: 0 0 10px rgba(153, 0, 255, 0.3);
+        }
+        
+        .queue-item.completed { border-color: #00ff00; }
+        .queue-item.failed { border-color: #ff0040; }
+        
+        .queue-header {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.5);
+            font-size: 0.85em;
+        }
+        
+        .queue-body {
+            padding: 10px 12px;
+        }
+        
+        .cipher-info {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+            font-size: 0.8em;
+        }
+        
+        .cipher-tag {
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+        }
+        
+        .cipher-tag.rsa { background: #ff0040; color: white; }
+        .cipher-tag.pqc { background: #00cc00; color: white; }
+        .cipher-tag.aes { background: #ffcc00; color: black; }
+        
+        /* Progress bar */
+        .progress-container {
+            margin: 10px 0;
+        }
+        
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75em;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        
+        .progress-bar {
+            height: 20px;
+            background: #111;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #9900ff, #ff00ff);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+            position: relative;
+        }
+        
+        .progress-fill.quantum {
+            background: linear-gradient(90deg, #00ccff, #9900ff, #ff00ff);
+            animation: quantumShimmer 2s infinite;
+        }
+        
+        @keyframes quantumShimmer {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.7em;
+            color: white;
+            text-shadow: 0 0 5px black;
+            z-index: 1;
+        }
+        
+        /* Attack steps */
+        .attack-steps {
+            font-size: 0.75em;
+            color: #666;
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 4px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        
+        .step { padding: 2px 0; }
+        .step.active { color: #9900ff; }
+        .step.done { color: #00ff00; }
+        .step.done::before { content: '✓ '; }
+        
+        /* Decrypted data display */
+        .decrypted-result {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid #00ff00;
+            border-radius: 4px;
+        }
+        
+        .decrypted-result h4 {
+            color: #00ff00;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        
+        .decrypted-field {
+            display: flex;
+            font-size: 0.8em;
+            padding: 3px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .decrypted-field:last-child { border-bottom: none; }
+        
+        .field-label { color: #888; width: 100px; }
+        .field-value { color: #ff6666; }
+        
+        /* Failed result */
+        .failed-result {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid #00ff00;
+            border-radius: 4px;
+        }
+        
+        .failed-result h4 {
+            color: #00ff00;
+            margin-bottom: 5px;
+        }
+        
+        /* Time estimate */
+        .time-estimate {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75em;
+            color: #666;
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px dashed #333;
+        }
+        
+        .time-value { color: #ffcc00; }
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .control-btn {
+            background: linear-gradient(135deg, #9900ff, #6600cc);
+            border: none;
+            color: white;
+            padding: 6px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+        
+        .control-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px #9900ff;
+        }
+        
+        .control-btn:disabled {
+            background: #333;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Console log */
+        .console-log {
+            background: #000;
+            padding: 10px;
+            font-size: 0.7em;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .log-entry { padding: 2px 0; }
+        .log-entry.info { color: #00ccff; }
+        .log-entry.warn { color: #ffcc00; }
+        .log-entry.error { color: #ff0040; }
+        .log-entry.success { color: #00ff00; }
+        .log-entry.quantum { color: #9900ff; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚛️ QUANTUM DECRYPTION CONSOLE</h1>
+        <div class="controls">
+            <button class="control-btn" onclick="startDecryptAll()">🚀 Decrypt All Vulnerable</button>
+            <button class="control-btn" onclick="loadFromHarvest()">📥 Load Harvested Data</button>
+        </div>
+        <div class="gpu-status">
+            <div class="gpu-indicator"></div>
+            <span id="gpuName">Loading GPU...</span>
+        </div>
+    </div>
+    
+    <div class="stats-bar">
+        <div class="stat">
+            <span>Queue:</span>
+            <span class="stat-value" id="queueCount">0</span>
+        </div>
+        <div class="stat">
+            <span>Processing:</span>
+            <span class="stat-value" id="processingCount">0</span>
+        </div>
+        <div class="stat">
+            <span>Decrypted:</span>
+            <span class="stat-value success" id="decryptedCount">0</span>
+        </div>
+        <div class="stat">
+            <span>Protected (PQC):</span>
+            <span class="stat-value fail" id="protectedCount">0</span>
+        </div>
+        <div class="stat">
+            <span>Est. Time:</span>
+            <span class="stat-value" id="estTime">--:--</span>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <!-- Decryption Queue -->
+        <div class="panel">
+            <div class="panel-header">📋 Decryption Queue</div>
+            <div class="panel-content" id="queuePanel">
+                <div style="text-align: center; color: #666; padding: 30px;">
+                    No items in queue.<br>
+                    Load harvested data or wait for interception.
+                </div>
+            </div>
+        </div>
+        
+        <!-- Results & Console -->
+        <div class="panel">
+            <div class="panel-header">🔓 Decryption Results</div>
+            <div class="panel-content" id="resultsPanel">
+                <div style="text-align: center; color: #666; padding: 30px;">
+                    No decryption results yet.<br>
+                    Start quantum attack on vulnerable data.
+                </div>
+            </div>
+            <div class="panel-header" style="border-top: 1px solid #333;">📜 Quantum Console</div>
+            <div class="console-log" id="consoleLog">
+                <div class="log-entry info">[SYSTEM] Quantum Decryption Console initialized</div>
+                <div class="log-entry info">[SYSTEM] Connecting to cuQuantum GPU service...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global state
+        let decryptionQueue = [];
+        let processingItem = null;
+        let results = [];
+        let gpuInfo = null;
+        
+        // Decryption time estimates (realistic simulation)
+        const DECRYPT_TIMES = {
+            'RSA-2048': { min: 30000, max: 60000, steps: 15 },      // 30-60 seconds
+            'RSA-4096': { min: 60000, max: 120000, steps: 20 },     // 1-2 minutes
+            'AES-128': { min: 120000, max: 180000, steps: 25 },     // 2-3 minutes (Grover's)
+            'AES-256': { min: 180000, max: 300000, steps: 30 },     // 3-5 minutes
+            'ML-KEM-768': { min: 300000, max: 300000, steps: 50 },  // Will fail
+            'ML-DSA-65': { min: 300000, max: 300000, steps: 50 },   // Will fail
+        };
+        
+        const SHOR_STEPS = [
+            'Initializing quantum register...',
+            'Loading RSA modulus N into quantum memory...',
+            'Selecting random base a < N...',
+            'Applying Hadamard gates to create superposition...',
+            'Preparing ancilla qubits...',
+            'Executing modular exponentiation oracle...',
+            'Computing a^x mod N in superposition...',
+            'Applying inverse QFT (Quantum Fourier Transform)...',
+            'Measuring period register...',
+            'Extracting period r from measurement...',
+            'Computing GCD(a^(r/2) - 1, N)...',
+            'Computing GCD(a^(r/2) + 1, N)...',
+            'Verifying prime factors p and q...',
+            'Reconstructing private key d...',
+            'Decrypting ciphertext with recovered key...',
+        ];
+        
+        const GROVER_STEPS = [
+            'Initializing quantum search register...',
+            'Creating uniform superposition over key space...',
+            'Preparing oracle for target key...',
+            'Iteration 1: Applying oracle (phase flip)...',
+            'Iteration 1: Applying diffusion operator...',
+            'Iteration 2: Oracle application...',
+            'Iteration 2: Amplitude amplification...',
+            'Continuing Grover iterations...',
+            'Approaching optimal iteration count...',
+            'Measuring quantum register...',
+            'Verifying candidate key...',
+            'Key verification successful...',
+            'Decrypting with recovered key...',
+        ];
+        
+        const LATTICE_STEPS = [
+            'Initializing lattice reduction...',
+            'Loading ML-KEM public parameters...',
+            'Attempting BKZ reduction...',
+            'Increasing block size...',
+            'Quantum-enhanced LLL reduction...',
+            'Searching for short vectors...',
+            'Checking SVP solution...',
+            'Attack complexity exceeds resources...',
+            '⚠️ LATTICE PROBLEM REMAINS HARD',
+            '🛡️ PQC PROTECTION VERIFIED',
+        ];
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadGpuInfo();
+            loadFromHarvest();
+            
+            // Initial fetch
+            setTimeout(async () => {
+                await checkForNewData();
+                log('🔄 Initial data sync complete', 'info');
+            }, 500);
+            
+            // Check for new data every 2 seconds and auto-start decryption
+            setInterval(async () => {
+                const prevCount = decryptionQueue.length;
+                await checkForNewData();
+                if (decryptionQueue.length > prevCount) {
+                    log(`📥 ${decryptionQueue.length - prevCount} new item(s) detected`, 'success');
+                }
+                autoStartDecryption();
+            }, 2000);
+        });
+        
+        // Auto-start decryption on new vulnerable items
+        async function autoStartDecryption() {
+            const vulnerable = decryptionQueue.filter(q => 
+                q.status === 'queued' && 
+                (q.encryption.includes('RSA') || q.encryption.includes('AES'))
+            );
+            
+            // Only auto-start if not already processing
+            if (processingItem === null && vulnerable.length > 0) {
+                log(`⚛️ Auto-starting quantum attack on ${vulnerable[0].type} (${vulnerable[0].encryption})...`, 'quantum');
+                await startDecrypt(vulnerable[0].id);
+            }
+        }
+        
+        // Force sync function - callable from Selenium test
+        async function forceSync() {
+            log('🔄 Force sync initiated by test automation...', 'info');
+            await fetchHarvestedData();
+            await fetchLiveInterceptData();
+            log(`📊 Queue now has ${decryptionQueue.length} items`, 'info');
+            autoStartDecryption();
+            return decryptionQueue.length;
+        }
+        
+        async function loadGpuInfo() {
+            try {
+                const response = await fetch('/api/hacker/gpu');
+                gpuInfo = await response.json();
+                document.getElementById('gpuName').textContent = 
+                    `${gpuInfo.gpuName} (${gpuInfo.vramMb}MB)`;
+                log('GPU connected: ' + gpuInfo.gpuName, 'success');
+            } catch (e) {
+                document.getElementById('gpuName').textContent = 'GPU Unavailable';
+                log('GPU connection failed - using CPU simulation', 'warn');
+            }
+        }
+        
+        function loadFromHarvest() {
+            // Try to load from localStorage (set by harvest dashboard)
+            const stored = localStorage.getItem('harvestedForDecrypt');
+            if (stored) {
+                try {
+                    const data = JSON.parse(stored);
+                    data.forEach(item => addToQueue(item));
+                    localStorage.removeItem('harvestedForDecrypt');
+                    log(`Loaded ${data.length} items from harvest`, 'info');
+                } catch (e) {
+                    log('Failed to load harvested data', 'error');
+                }
+            }
+            
+            // Also fetch from backend
+            fetchHarvestedData();
+        }
+        
+        async function fetchHarvestedData() {
+            try {
+                const response = await fetch('/api/hacker/harvested');
+                const data = await response.json();
+                
+                data.forEach(item => {
+                    if (!decryptionQueue.find(q => q.documentId === item.documentId)) {
+                        addToQueue({
+                            documentId: item.documentId || item.id,
+                            type: item.documentType || item.type,
+                            applicant: item.applicant,
+                            encryption: item.encryptionAlgorithm || item.encryption || 'RSA-2048',
+                            signature: item.signatureAlgorithm || item.signature || 'RSA-2048',
+                            encryptedData: item.encryptedPayload || generateHex(512),
+                            signatureData: item.signatureData || generateHex(256),
+                        });
+                    }
+                });
+            } catch (e) {
+                console.log('No harvested data available');
+            }
+        }
+        
+        async function checkForNewData() {
+            await fetchHarvestedData();
+            await fetchLiveInterceptData();
+        }
+        
+        async function fetchLiveInterceptData() {
+            try {
+                const response = await fetch('/api/hacker/intercept/live');
+                const data = await response.json();
+                
+                if (data.newTransactions && data.newTransactions.length > 0) {
+                    data.newTransactions.forEach(tx => {
+                        const mapped = {
+                            documentId: tx.documentId,
+                            type: tx.documentType || tx.type,
+                            applicant: tx.applicant,
+                            encryption: (tx.encryptionAlgorithm || tx.encryption || 'RSA-2048').replace('_', '-'),
+                            signature: (tx.signatureAlgorithm || tx.signature || 'RSA-2048').replace('_', '-'),
+                            encryptedData: generateHex(512),
+                            signatureData: generateHex(256),
+                        };
+                        if (!decryptionQueue.find(q => q.documentId === mapped.documentId)) {
+                            addToQueue(mapped);
+                        }
+                    });
+                }
+            } catch (e) {
+                console.log('Live intercept fetch error:', e);
+            }
+        }
+        
+        function generateHex(length) {
+            let hex = '';
+            for (let i = 0; i < length; i++) {
+                hex += Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase();
+            }
+            return hex;
+        }
+        
+        function addToQueue(item) {
+            if (decryptionQueue.find(q => q.documentId === item.documentId)) return;
+            
+            const queueItem = {
+                id: Date.now() + Math.random(),
+                documentId: item.documentId,
+                type: item.type,
+                applicant: item.applicant,
+                encryption: item.encryption,
+                signature: item.signature,
+                encryptedData: item.encryptedData,
+                signatureData: item.signatureData,
+                status: 'queued',
+                progress: 0,
+                currentStep: 0,
+                steps: [],
+                startTime: null,
+                endTime: null,
+                result: null,
+            };
+            
+            decryptionQueue.push(queueItem);
+            renderQueue();
+            updateStats();
+            log(`Added to queue: ${item.type} (${item.encryption})`, 'info');
+        }
+        
+        function renderQueue() {
+            const container = document.getElementById('queuePanel');
+            
+            if (decryptionQueue.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: #666; padding: 30px;">
+                        No items in queue.<br>Load harvested data.
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = decryptionQueue.map(item => {
+                const isRsa = item.encryption.includes('RSA');
+                const isPqc = item.encryption.includes('ML-KEM') || item.encryption.includes('ML-DSA');
+                const isProcessing = item.status === 'processing';
+                
+                const timeInfo = DECRYPT_TIMES[item.encryption] || DECRYPT_TIMES['RSA-2048'];
+                const estSeconds = Math.floor((timeInfo.min + timeInfo.max) / 2000);
+                
+                let statusClass = '';
+                if (item.status === 'processing') statusClass = 'processing';
+                else if (item.status === 'completed') statusClass = 'completed';
+                else if (item.status === 'failed') statusClass = 'failed';
+                
+                return `
+                    <div class="queue-item ${statusClass}">
+                        <div class="queue-header">
+                            <span>📄 ${item.type} | ${item.documentId}</span>
+                            <span style="color: ${item.status === 'completed' ? '#00ff00' : item.status === 'failed' ? '#ff0040' : '#666'}">
+                                ${item.status.toUpperCase()}
+                            </span>
+                        </div>
+                        <div class="queue-body">
+                            <div class="cipher-info">
+                                <span>🔐 Encryption:</span>
+                                <span class="cipher-tag ${isPqc ? 'pqc' : (isRsa ? 'rsa' : 'aes')}">${item.encryption}</span>
+                                <span>✍️ Signature:</span>
+                                <span class="cipher-tag ${item.signature.includes('ML-DSA') ? 'pqc' : 'rsa'}">${item.signature}</span>
+                            </div>
+                            
+                            ${isProcessing || item.status === 'completed' || item.status === 'failed' ? `
+                                <div class="progress-container">
+                                    <div class="progress-label">
+                                        <span>${item.steps[item.currentStep] || 'Initializing...'}</span>
+                                        <span>${item.progress}%</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill ${isProcessing ? 'quantum' : ''}" 
+                                             style="width: ${item.progress}%">
+                                        </div>
+                                        <span class="progress-text">${item.progress}%</span>
+                                    </div>
+                                </div>
+                                <div class="attack-steps">
+                                    ${item.steps.map((step, i) => `
+                                        <div class="step ${i < item.currentStep ? 'done' : (i === item.currentStep ? 'active' : '')}">
+                                            ${step}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : `
+                                <div class="time-estimate">
+                                    <span>Est. decryption time:</span>
+                                    <span class="time-value">${isPqc ? '∞ (Protected)' : `~${estSeconds}s`}</span>
+                                </div>
+                            `}
+                            
+                            ${item.status === 'queued' ? `
+                                <button class="control-btn" style="margin-top: 10px; width: 100%;"
+                                        onclick="startDecrypt('${item.id}')">
+                                    ⚛️ Start Quantum Attack
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function renderResults() {
+            const container = document.getElementById('resultsPanel');
+            
+            if (results.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: #666; padding: 30px;">
+                        No decryption results yet.
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = results.map(result => {
+                if (result.success) {
+                    return `
+                        <div class="decrypted-result">
+                            <h4>💔 DECRYPTED: ${result.type}</h4>
+                            <div class="decrypted-field">
+                                <span class="field-label">Doc ID:</span>
+                                <span class="field-value">${result.documentId}</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Applicant:</span>
+                                <span class="field-value">${result.applicant}</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Algorithm:</span>
+                                <span class="field-value">${result.encryption} (BROKEN)</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Attack Time:</span>
+                                <span class="field-value">${(result.attackTime / 1000).toFixed(1)}s</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Signature:</span>
+                                <span class="field-value">${result.signatureForged ? 'FORGED ✗' : 'Verified'}</span>
+                            </div>
+                            <p style="color: #ff6666; font-size: 0.8em; margin-top: 8px;">
+                                ⚠️ All personal data in this document is now EXPOSED!
+                            </p>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="failed-result">
+                            <h4>🛡️ PROTECTED: ${result.type}</h4>
+                            <div class="decrypted-field">
+                                <span class="field-label">Algorithm:</span>
+                                <span class="field-value" style="color: #00ff00;">${result.encryption}</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Status:</span>
+                                <span class="field-value" style="color: #00ff00;">QUANTUM-RESISTANT</span>
+                            </div>
+                            <p style="color: #00ff00; font-size: 0.8em; margin-top: 8px;">
+                                ✅ Post-Quantum Cryptography successfully defended against attack!
+                            </p>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+        
+        async function startDecrypt(itemId) {
+            const item = decryptionQueue.find(q => q.id == itemId);
+            if (!item || item.status !== 'queued') return;
+            
+            item.status = 'processing';
+            item.startTime = Date.now();
+            processingItem = item;
+            
+            const isPqc = item.encryption.includes('ML-KEM') || item.encryption.includes('ML-DSA');
+            const isRsa = item.encryption.includes('RSA');
+            const isAes = item.encryption.includes('AES');
+            
+            // Select appropriate attack steps
+            if (isRsa) {
+                item.steps = [...SHOR_STEPS];
+            } else if (isAes) {
+                item.steps = [...GROVER_STEPS];
+            } else {
+                item.steps = [...LATTICE_STEPS];
+            }
+            
+            const timeInfo = DECRYPT_TIMES[item.encryption] || DECRYPT_TIMES['RSA-2048'];
+            const totalTime = timeInfo.min + Math.random() * (timeInfo.max - timeInfo.min);
+            const stepTime = totalTime / item.steps.length;
+            
+            log(`Starting ${isRsa ? "Shor's" : isAes ? "Grover's" : "Lattice"} attack on ${item.encryption}...`, 'quantum');
+            
+            renderQueue();
+            updateStats();
+            
+            // Simulate decryption progress
+            for (let i = 0; i < item.steps.length; i++) {
+                if (isPqc && i >= item.steps.length - 2) {
+                    // PQC attack fails
+                    item.currentStep = i;
+                    item.progress = Math.min(95, Math.floor((i / item.steps.length) * 100));
+                    renderQueue();
+                    log(item.steps[i], isPqc && i >= item.steps.length - 3 ? 'error' : 'quantum');
+                    await sleep(stepTime);
+                } else {
+                    item.currentStep = i;
+                    item.progress = Math.floor((i / item.steps.length) * 100);
+                    renderQueue();
+                    log(item.steps[i], 'quantum');
+                    await sleep(stepTime);
+                }
+            }
+            
+            // Complete
+            item.endTime = Date.now();
+            item.progress = 100;
+            
+            if (isPqc) {
+                item.status = 'failed';
+                item.result = {
+                    success: false,
+                    documentId: item.documentId,
+                    type: item.type,
+                    encryption: item.encryption,
+                    message: 'Post-Quantum Cryptography resisted attack',
+                };
+                log(`🛡️ ATTACK FAILED: ${item.encryption} is quantum-resistant!`, 'success');
+            } else {
+                item.status = 'completed';
+                item.result = {
+                    success: true,
+                    documentId: item.documentId,
+                    type: item.type,
+                    applicant: item.applicant,
+                    encryption: item.encryption,
+                    attackTime: item.endTime - item.startTime,
+                    signatureForged: !item.signature.includes('ML-DSA'),
+                };
+                log(`💔 DECRYPTED: ${item.type} - ${item.encryption} BROKEN!`, 'error');
+            }
+            
+            results.unshift(item.result);
+            processingItem = null;
+            
+            renderQueue();
+            renderResults();
+            updateStats();
+            
+            // Also decrypt signature if RSA
+            if (isRsa && !item.signature.includes('ML-DSA')) {
+                await decryptSignature(item);
+            }
+        }
+        
+        async function decryptSignature(item) {
+            log(`Starting signature forgery attack on ${item.signature}...`, 'quantum');
+            await sleep(5000);
+            log(`✗ Digital signature FORGED - document integrity compromised!`, 'error');
+        }
+        
+        async function startDecryptAll() {
+            const vulnerable = decryptionQueue.filter(q => 
+                q.status === 'queued' && 
+                (q.encryption.includes('RSA') || q.encryption.includes('AES'))
+            );
+            
+            if (vulnerable.length === 0) {
+                log('No vulnerable items to decrypt', 'warn');
+                return;
+            }
+            
+            log(`Starting batch decryption of ${vulnerable.length} vulnerable items...`, 'info');
+            
+            for (const item of vulnerable) {
+                await startDecrypt(item.id);
+            }
+            
+            log('Batch decryption complete!', 'success');
+        }
+        
+        function updateStats() {
+            document.getElementById('queueCount').textContent = decryptionQueue.length;
+            document.getElementById('processingCount').textContent = 
+                decryptionQueue.filter(q => q.status === 'processing').length;
+            document.getElementById('decryptedCount').textContent = 
+                results.filter(r => r.success).length;
+            document.getElementById('protectedCount').textContent = 
+                results.filter(r => !r.success).length;
+            
+            // Calculate estimated time for remaining
+            const remaining = decryptionQueue.filter(q => q.status === 'queued');
+            let totalMs = 0;
+            remaining.forEach(item => {
+                const timeInfo = DECRYPT_TIMES[item.encryption] || DECRYPT_TIMES['RSA-2048'];
+                totalMs += (timeInfo.min + timeInfo.max) / 2;
+            });
+            
+            if (totalMs > 0) {
+                const mins = Math.floor(totalMs / 60000);
+                const secs = Math.floor((totalMs % 60000) / 1000);
+                document.getElementById('estTime').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                document.getElementById('estTime').textContent = '--:--';
+            }
+        }
+        
+        function log(message, type = 'info') {
+            const container = document.getElementById('consoleLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+</body>
+</html>
