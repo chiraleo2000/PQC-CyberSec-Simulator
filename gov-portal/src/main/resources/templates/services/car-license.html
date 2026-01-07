@@ -240,7 +240,7 @@
                 </div>
 
                 <div class="form-section">
-                    <h3>🔐 Encryption Method</h3>
+                    <h3>🔐 Encryption Method (Key Encapsulation)</h3>
                     <p style="color: #666; margin-bottom: 15px;">
                         Choose how your sensitive data will be encrypted during transmission:
                     </p>
@@ -272,6 +272,36 @@
                     </div>
                 </div>
 
+                <div class="form-section">
+                    <h3>✍️ Digital Signature Method</h3>
+                    <p style="color: #666; margin-bottom: 15px;">
+                        Choose the digital signature algorithm to verify document authenticity:
+                    </p>
+                    
+                    <div class="encryption-options">
+                        <label class="encryption-option vulnerable" onclick="selectSignature(this, 'RSA_2048')">
+                            <input type="radio" name="signatureType" value="RSA_2048" checked>
+                            <div class="name">⚠️ RSA-2048 (Classical)</div>
+                            <div class="description">
+                                Traditional signatures. Vulnerable to quantum forgery attacks.
+                            </div>
+                        </label>
+                        
+                        <label class="encryption-option secure" onclick="selectSignature(this, 'ML_DSA')">
+                            <input type="radio" name="signatureType" value="ML_DSA">
+                            <div class="name">✅ ML-DSA (Dilithium)</div>
+                            <div class="description">
+                                NIST FIPS 204 approved. Quantum-resistant signatures.
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="warning-box" id="sigWarning">
+                        <p>⚠️ <strong>Warning:</strong> RSA signatures can be forged by quantum computers,
+                        allowing attackers to create fake documents that appear authentic.</p>
+                    </div>
+                </div>
+
                 <button type="submit" class="btn-submit">📤 Submit Application</button>
             </form>
 
@@ -283,7 +313,7 @@
 
     <script>
         function selectEncryption(element, value) {
-            document.querySelectorAll('.encryption-option').forEach(opt => {
+            document.querySelectorAll('.encryption-options').item(0).querySelectorAll('.encryption-option').forEach(opt => {
                 opt.classList.remove('selected');
             });
             element.classList.add('selected');
@@ -297,10 +327,28 @@
                 warning.classList.remove('show');
             }
         }
+
+        function selectSignature(element, value) {
+            document.querySelectorAll('.encryption-options').item(1).querySelectorAll('.encryption-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            element.querySelector('input').checked = true;
+            
+            // Show warning for RSA signature
+            const warning = document.getElementById('sigWarning');
+            if (value === 'RSA_2048') {
+                warning.classList.add('show');
+            } else {
+                warning.classList.remove('show');
+            }
+        }
         
-        // Initialize
-        document.querySelector('.encryption-option.vulnerable').classList.add('selected');
+        // Initialize - RSA selected by default for both
+        document.querySelectorAll('.encryption-options').item(0).querySelector('.encryption-option.vulnerable').classList.add('selected');
+        document.querySelectorAll('.encryption-options').item(1).querySelector('.encryption-option.vulnerable').classList.add('selected');
         document.getElementById('rsaWarning').classList.add('show');
+        document.getElementById('sigWarning').classList.add('show');
     </script>
 </body>
 </html>

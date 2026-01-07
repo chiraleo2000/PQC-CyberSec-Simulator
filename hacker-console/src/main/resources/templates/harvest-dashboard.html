@@ -343,6 +343,44 @@
         let autoCapture = true;
         let pollInterval = null;
         
+        /**
+         * Convert algorithm enum name to display name.
+         * Input: 'RSA_2048', 'ML_KEM', 'ML_DSA', etc.
+         * Output: 'RSA-2048', 'ML-KEM-768', 'ML-DSA-65', etc.
+         */
+        function formatAlgorithmName(algo) {
+            if (!algo) return 'RSA-2048';
+            const upper = algo.toUpperCase();
+            
+            // Check for PQC algorithms first (exact matches)
+            if (upper === 'ML_KEM' || upper === 'ML-KEM' || upper.includes('KYBER')) {
+                return 'ML-KEM-768';
+            }
+            if (upper === 'ML_DSA' || upper === 'ML-DSA' || upper.includes('DILITHIUM')) {
+                return 'ML-DSA-65';
+            }
+            if (upper.includes('SLH_DSA') || upper.includes('SPHINCS')) {
+                return 'SLH-DSA-128';
+            }
+            
+            // Classical algorithms
+            if (upper === 'RSA_4096' || upper === 'RSA-4096') {
+                return 'RSA-4096';
+            }
+            if (upper === 'RSA_2048' || upper === 'RSA-2048' || upper.includes('RSA')) {
+                return 'RSA-2048';
+            }
+            if (upper.includes('AES_256') || upper.includes('AES-256')) {
+                return 'AES-256';
+            }
+            if (upper.includes('AES')) {
+                return 'AES-128';
+            }
+            
+            // Fallback: replace underscores with dashes
+            return algo.replace(/_/g, '-');
+        }
+        
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             startPolling();
@@ -375,8 +413,9 @@
                             documentId: tx.documentId,
                             type: tx.documentType || tx.type,
                             applicant: tx.applicant,
-                            encryption: (tx.encryptionAlgorithm || tx.encryption || 'RSA-2048').replace('_', '-').replace('ML-KEM', 'ML-KEM-768'),
-                            signature: (tx.signatureAlgorithm || tx.signature || 'RSA_2048').replace('_', '-').replace('ML-DSA', 'ML-DSA-65'),
+                            // Use encryptionAlgorithm (enum name like RSA_2048, ML_KEM) from the API
+                            encryption: formatAlgorithmName(tx.encryptionAlgorithm || 'RSA_2048'),
+                            signature: formatAlgorithmName(tx.signatureAlgorithm || 'RSA_2048'),
                             status: tx.status,
                             encryptedPayload: tx.encryptedPayload
                         };
@@ -398,8 +437,9 @@
                             documentId: tx.documentId,
                             type: tx.type,
                             applicant: tx.applicant,
-                            encryption: (tx.encryption || 'RSA-2048').replace('_', '-').replace('ML-KEM', 'ML-KEM-768'),
-                            signature: (tx.signature || 'RSA_2048').replace('_', '-').replace('ML-DSA', 'ML-DSA-65'),
+                            // Use encryptionAlgorithm (enum name like RSA_2048, ML_KEM) from the API
+                            encryption: formatAlgorithmName(tx.encryptionAlgorithm || tx.encryptionAlgorithmName || 'RSA_2048'),
+                            signature: formatAlgorithmName(tx.signatureAlgorithm || tx.signatureAlgorithmName || 'RSA_2048'),
                             status: tx.status
                         };
                         const existingIds = packets.map(p => p.documentId);

@@ -45,6 +45,11 @@ public class Document {
     @JoinColumn(name = "signer_id")
     private User signer;
 
+    // Encryption Algorithm (for key encapsulation: RSA, ML-KEM)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "encryption_algorithm")
+    private CryptoAlgorithm encryptionAlgorithm;
+
     // Signature
     @Column(columnDefinition = "bytea")
     private byte[] signature;

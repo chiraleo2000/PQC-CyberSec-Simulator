@@ -75,6 +75,9 @@ public class FourPanelRealisticDemoTest {
     // State tracking
     private int documentsSubmitted = 0;
     private boolean quantumServiceAvailable = false;
+    
+    // Demo scenario from system property: 1=RSA+RSA, 2=PQC+PQC, 3=RSA+PQC, 4=PQC+RSA
+    private static final String DEMO_SCENARIO = System.getProperty("demo.scenario", "1");
 
     @BeforeAll
     void setupBrowsers() {
@@ -132,6 +135,10 @@ public class FourPanelRealisticDemoTest {
     }
 
     private void printBanner() {
+        String scenarioInfo = getScenarioDescription();
+        String kemAlgo = getKemAlgorithm();
+        String sigAlgo = getSigAlgorithm();
+        
         System.out.println("\n");
         System.out.println("╔════════════════════════════════════════════════════════════════════════════════════════╗");
         System.out.println("║          🛡️ PQC CYBERSECURITY - 4-PANEL REALISTIC DEMONSTRATION                       ║");
@@ -143,6 +150,9 @@ public class FourPanelRealisticDemoTest {
         System.out.println("╠════════════════════════════════════════════════════════════════════════════════════════╣");
         System.out.println("║  📡 Services: gov-portal:8181 | hacker-console:8183 | quantum-sim:8184                 ║");
         System.out.println("║  ⚛️ Quantum: " + (quantumServiceAvailable ? "AVAILABLE (GPU cuQuantum)   " : "UNAVAILABLE (simulation)    ") + "                                        ║");
+        System.out.println("╠════════════════════════════════════════════════════════════════════════════════════════╣");
+        System.out.printf("║  🔐 SCENARIO %s: %-68s ║%n", DEMO_SCENARIO, scenarioInfo);
+        System.out.printf("║     KEM Algorithm: %-10s | Signature Algorithm: %-10s                         ║%n", kemAlgo, sigAlgo);
         System.out.println("╚════════════════════════════════════════════════════════════════════════════════════════╝\n");
     }
 
@@ -280,14 +290,21 @@ public class FourPanelRealisticDemoTest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════════
-    // TEST 3: Citizen Submits Car License (RSA - VULNERABLE)
+    // TEST 3: Citizen Submits Car License (Algorithm based on scenario)
     // ═══════════════════════════════════════════════════════════════════════════════════════════
     @Test
     @Order(3)
-    @DisplayName("3. 🚗 Citizen: Car License (RSA-2048 - VULNERABLE)")
+    @DisplayName("3. 🚗 Citizen: Car License Application")
     void citizenSubmitsCarLicenseRSA() {
+        // Determine algorithms based on scenario
+        String kemAlgo = getKemAlgorithm();
+        String sigAlgo = getSigAlgorithm();
+        String kemName = kemAlgo.contains("RSA") ? "RSA-2048" : "ML-KEM-768";
+        String sigName = sigAlgo.contains("RSA") ? "RSA-2048" : "ML-DSA-65";
+        
         System.out.println("════════════════════════════════════════════════════════════════════════════════");
-        System.out.println("  TEST 3: Citizen Submits Car License with RSA-2048");
+        System.out.println("  TEST 3: Citizen Submits Car License");
+        System.out.println("  SCENARIO " + DEMO_SCENARIO + ": KEM=" + kemName + ", Sig=" + sigName);
         System.out.println("════════════════════════════════════════════════════════════════════════════════\n");
 
         citizenBrowser.get(GOV_URL + "/services/car-license");
@@ -306,12 +323,17 @@ public class FourPanelRealisticDemoTest {
             fillField(citizenBrowser, "vehicleMake", "Toyota Camry");
             selectDropdown(citizenBrowser, "vehicleYear", "2024");
             
-            // SELECT RSA ENCRYPTION (VULNERABLE!)
-            clickRadioByValue(citizenBrowser, "RSA_2048");
+            // SELECT ENCRYPTION based on scenario
+            clickRadioByValue(citizenBrowser, kemAlgo);
+            sleep(500);
+            
+            // SELECT SIGNATURE based on scenario
+            clickRadioByValue(citizenBrowser, sigAlgo);
             sleep(500);
 
             System.out.println("📝 CITIZEN: Filling Car License Application");
-            System.out.println("   ⚠️ ENCRYPTION: RSA-2048 (QUANTUM VULNERABLE!)");
+            System.out.println("   🔐 ENCRYPTION: " + kemName + (kemAlgo.contains("RSA") ? " ⚠️ VULNERABLE" : " ✅ QUANTUM-SAFE"));
+            System.out.println("   ✍️ SIGNATURE:  " + sigName + (sigAlgo.contains("RSA") ? " ⚠️ VULNERABLE" : " ✅ QUANTUM-SAFE"));
 
             WebElement submitBtn = citizenBrowser.findElement(By.cssSelector("button[type='submit']"));
             submitBtn.click();
@@ -388,14 +410,21 @@ public class FourPanelRealisticDemoTest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════════
-    // TEST 5: Citizen Submits Tax Filing (ML-KEM - QUANTUM SAFE)
+    // TEST 5: Citizen Submits Tax Filing (SCENARIO-BASED ALGORITHM SELECTION)
     // ═══════════════════════════════════════════════════════════════════════════════════════════
     @Test
     @Order(5)
-    @DisplayName("5. 💰 Citizen: Tax Filing (ML-KEM - QUANTUM SAFE)")
+    @DisplayName("5. 💰 Citizen: Tax Filing (Scenario-based Algorithm)")
     void citizenSubmitsTaxFilingMLKEM() {
+        String kemAlgo = getKemAlgorithm();
+        String sigAlgo = getSigAlgorithm();
+        String scenarioDesc = getScenarioDescription();
+        boolean isKemPQC = kemAlgo.contains("ML_KEM");
+        boolean isSigPQC = sigAlgo.contains("ML_DSA");
+        
         System.out.println("════════════════════════════════════════════════════════════════════════════════");
-        System.out.println("  TEST 5: Citizen Submits Tax Filing with ML-KEM-768");
+        System.out.println("  TEST 5: Citizen Submits Tax Filing - " + scenarioDesc);
+        System.out.println("  KEM: " + kemAlgo + " | Signature: " + sigAlgo);
         System.out.println("════════════════════════════════════════════════════════════════════════════════\n");
 
         citizenBrowser.get(GOV_URL + "/services/tax-filing");
@@ -415,33 +444,45 @@ public class FourPanelRealisticDemoTest {
             sleep(500);
             fillField(citizenBrowser, "bankAccount", "****" + (1000 + new Random().nextInt(9000)));
             
-            // SELECT ML-KEM ENCRYPTION (QUANTUM-SAFE!)
-            clickRadioByValue(citizenBrowser, "ML_KEM");
+            // SELECT ENCRYPTION ALGORITHM BASED ON SCENARIO
+            clickRadioByValue(citizenBrowser, kemAlgo);
+            sleep(500);
+            
+            // SELECT SIGNATURE ALGORITHM IF AVAILABLE
+            try {
+                clickRadioByValue(citizenBrowser, sigAlgo);
+            } catch (Exception ignored) {}
             sleep(500);
 
             System.out.println("📝 CITIZEN: Filling Tax Filing");
             System.out.println("   💵 Income: $" + String.format("%,d", grossIncome));
-            System.out.println("   🛡️ ENCRYPTION: ML-KEM-768 (QUANTUM SAFE!)");
+            System.out.println("   🔐 ENCRYPTION: " + kemAlgo + (isKemPQC ? " (QUANTUM SAFE!)" : " (VULNERABLE!)"));
+            System.out.println("   ✍️ SIGNATURE:  " + sigAlgo + (isSigPQC ? " (QUANTUM SAFE!)" : " (VULNERABLE!)"));
 
             WebElement submitBtn = citizenBrowser.findElement(By.cssSelector("button[type='submit']"));
             submitBtn.click();
             documentsSubmitted++;
             sleep(3000);
 
-            System.out.println("✅ CITIZEN: Tax Filing SUBMITTED with PQC!\n");
+            System.out.println("✅ CITIZEN: Tax Filing SUBMITTED!\n");
 
-            // Hacker captures but can't decrypt
+            // Hacker captures
             System.out.println("📡 HACKER HARVEST: Encrypted packet captured!");
             System.out.println("   📦 Document: Tax Filing");
-            System.out.println("   🛡️ Encryption: ML-KEM-768 (Quantum-Resistant)");
-            System.out.println("   🛡️ Signature: ML-DSA-65 (Quantum-Resistant)");
+            System.out.println("   🔐 Encryption: " + kemAlgo + (isKemPQC ? " (Quantum-Resistant)" : " (Quantum-Vulnerable)"));
+            System.out.println("   ✍️ Signature:  " + sigAlgo + (isSigPQC ? " (Quantum-Resistant)" : " (Quantum-Vulnerable)"));
             
             // Sync both hacker panels
             syncHackerPanels();
             
-            // Watch decryption attempt on PQC document
-            System.out.println("⚛️ HACKER DECRYPT: Attempting quantum attack on ML-KEM-768...");
-            System.out.println("   🛡️ This attack will FAIL - PQC is quantum-resistant!\n");
+            // Watch decryption attempt
+            if (isKemPQC) {
+                System.out.println("⚛️ HACKER DECRYPT: Attempting quantum attack on " + kemAlgo + "...");
+                System.out.println("   🛡️ This attack will FAIL - PQC is quantum-resistant!\n");
+            } else {
+                System.out.println("⚛️ HACKER DECRYPT: Quantum attack on " + kemAlgo + "...");
+                System.out.println("   💀 This encryption IS VULNERABLE to quantum computers!\n");
+            }
             sleep(5000);
 
         } catch (Exception e) {
@@ -669,6 +710,40 @@ public class FourPanelRealisticDemoTest {
         System.out.println("  DEMONSTRATION COMPLETE - Browsers remain open for manual testing");
         System.out.println("  Press Ctrl+C or close browsers manually when done");
         System.out.println("════════════════════════════════════════════════════════════════════════════════\n");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════════
+    // SCENARIO-BASED ALGORITHM SELECTION
+    // Scenario 1: RSA KEM + RSA Sig (FULLY VULNERABLE)
+    // Scenario 2: ML-KEM + ML-DSA (FULLY QUANTUM-SAFE)
+    // Scenario 3: RSA KEM + ML-DSA (MIXED - Encryption vulnerable)
+    // Scenario 4: ML-KEM + RSA Sig (MIXED - Signature vulnerable)
+    // ═══════════════════════════════════════════════════════════════════════════════════════════
+    
+    private String getKemAlgorithm() {
+        return switch (DEMO_SCENARIO) {
+            case "1", "3" -> "RSA_2048";    // RSA for scenarios 1 and 3
+            case "2", "4" -> "ML_KEM";       // ML-KEM for scenarios 2 and 4
+            default -> "RSA_2048";
+        };
+    }
+    
+    private String getSigAlgorithm() {
+        return switch (DEMO_SCENARIO) {
+            case "1", "4" -> "RSA_2048";    // RSA for scenarios 1 and 4
+            case "2", "3" -> "ML_DSA";       // ML-DSA for scenarios 2 and 3
+            default -> "RSA_2048";
+        };
+    }
+    
+    private String getScenarioDescription() {
+        return switch (DEMO_SCENARIO) {
+            case "1" -> "FULLY VULNERABLE (RSA KEM + RSA Sig)";
+            case "2" -> "FULLY QUANTUM-SAFE (ML-KEM + ML-DSA)";
+            case "3" -> "MIXED - Encryption Vulnerable (RSA KEM + ML-DSA)";
+            case "4" -> "MIXED - Signature Vulnerable (ML-KEM + RSA Sig)";
+            default -> "Default (RSA + RSA)";
+        };
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════════

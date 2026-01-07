@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS documents (
     applicant_id BIGINT REFERENCES users(id),
     signer_id BIGINT REFERENCES users(id),
     
+    -- Encryption
+    encryption_algorithm VARCHAR(50),
+    
     -- Signature
     signature BYTEA,
     signature_algorithm VARCHAR(50),

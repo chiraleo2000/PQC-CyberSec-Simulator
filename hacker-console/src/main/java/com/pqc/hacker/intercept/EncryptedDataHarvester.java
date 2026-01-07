@@ -88,15 +88,23 @@ public class EncryptedDataHarvester {
                         itx.setDocumentId(String.valueOf(tx.get("documentId")));
                         itx.setDocumentType(String.valueOf(tx.get("type")));
                         itx.setApplicant(String.valueOf(tx.get("applicant")));
-                        itx.setEncryptionAlgorithm(String.valueOf(tx.get("encryption")));
+                        // Use the enum name for algorithm identification (RSA_2048, ML_KEM, ML_DSA, etc.)
+                        itx.setEncryptionAlgorithm(String.valueOf(tx.get("encryptionAlgorithm")));
+                        itx.setSignatureAlgorithm(String.valueOf(tx.get("signatureAlgorithm")));
                         itx.setStatus(String.valueOf(tx.get("status")));
                         itx.setInterceptedAt(LocalDateTime.now());
                         
-                        // Simulate capturing encrypted payload
+                        // Simulate capturing encrypted payload (KEM ciphertext)
                         itx.setEncryptedPayload(generateSimulatedEncryptedData(itx.getEncryptionAlgorithm()));
+                        
+                        // Simulate capturing digital signature data
+                        itx.setSignatureData(generateSimulatedSignatureData(itx.getSignatureAlgorithm()));
                         
                         // Extract encryption metadata for quantum attack
                         itx.setKeyMetadata(extractKeyMetadata(itx.getEncryptionAlgorithm()));
+                        
+                        // Extract signature metadata for quantum attack
+                        itx.setSignatureKeyMetadata(extractKeyMetadata(itx.getSignatureAlgorithm()));
                         
                         intercepted.add(itx);
                         harvestedData.add(itx);
@@ -127,7 +135,7 @@ public class EncryptedDataHarvester {
     }
 
     /**
-     * PHASE 2: ATTACK - Attempt quantum decryption on harvested data
+     * PHASE 2: ATTACK - Attempt quantum decryption AND signature forgery on harvested data
      */
     public QuantumAttackReport executeQuantumAttack() {
         log.warn("⚛️ QUANTUM ATTACK: Deploying Shor's algorithm against {} intercepted transactions", 
@@ -139,30 +147,54 @@ public class EncryptedDataHarvester {
         report.setTotalTargets(harvestedData.size());
         
         List<AttackResult> results = new ArrayList<>();
-        int rsaBroken = 0;
-        int pqcProtected = 0;
+        int rsaEncryptionBroken = 0;
+        int rsaSignatureForged = 0;
+        int pqcEncryptionProtected = 0;
+        int pqcSignatureProtected = 0;
         
         for (InterceptedTransaction tx : harvestedData) {
-            AttackResult ar = attackTransaction(tx);
-            results.add(ar);
+            // Attack ENCRYPTION algorithm
+            AttackResult encryptionAttack = attackEncryption(tx);
+            results.add(encryptionAttack);
             
-            if (ar.isDecrypted()) {
-                rsaBroken++;
-            } else if (ar.getAlgorithm().contains("ML-KEM") || ar.getAlgorithm().contains("ML-DSA")) {
-                pqcProtected++;
+            if (encryptionAttack.isDecrypted()) {
+                rsaEncryptionBroken++;
+            } else if (encryptionAttack.getAlgorithm().contains("ML_KEM") || 
+                       encryptionAttack.getAlgorithm().contains("ML-KEM")) {
+                pqcEncryptionProtected++;
+            }
+            
+            // Attack SIGNATURE algorithm
+            AttackResult signatureAttack = attackSignature(tx);
+            results.add(signatureAttack);
+            
+            if (signatureAttack.isForged()) {
+                rsaSignatureForged++;
+            } else if (signatureAttack.getAlgorithm().contains("ML_DSA") || 
+                       signatureAttack.getAlgorithm().contains("ML-DSA")) {
+                pqcSignatureProtected++;
             }
         }
         
         report.setAttackResults(results);
-        report.setRsaKeysBroken(rsaBroken);
-        report.setPqcProtectedCount(pqcProtected);
+        report.setRsaKeysBroken(rsaEncryptionBroken);
+        report.setRsaSignaturesForged(rsaSignatureForged);
+        report.setPqcProtectedCount(pqcEncryptionProtected + pqcSignatureProtected);
         report.setAttackEndTime(LocalDateTime.now());
         
         // Generate attack summary
-        if (rsaBroken > 0) {
-            report.setOverallResult("⚠️ CRITICAL: " + rsaBroken + " RSA-encrypted documents DECRYPTED!");
+        int totalBroken = rsaEncryptionBroken + rsaSignatureForged;
+        if (totalBroken > 0) {
+            StringBuilder sb = new StringBuilder("⚠️ CRITICAL: ");
+            if (rsaEncryptionBroken > 0) {
+                sb.append(rsaEncryptionBroken).append(" encryption(s) DECRYPTED! ");
+            }
+            if (rsaSignatureForged > 0) {
+                sb.append(rsaSignatureForged).append(" signature(s) FORGED!");
+            }
+            report.setOverallResult(sb.toString());
             report.setSeverity("CRITICAL");
-        } else if (pqcProtected > 0) {
+        } else if (pqcEncryptionProtected > 0 || pqcSignatureProtected > 0) {
             report.setOverallResult("🛡️ PROTECTED: All documents using Post-Quantum Cryptography remain secure");
             report.setSeverity("SECURE");
         } else {
@@ -170,24 +202,25 @@ public class EncryptedDataHarvester {
             report.setSeverity("UNKNOWN");
         }
         
-        log.warn("📊 ATTACK COMPLETE: {} RSA broken, {} PQC protected", rsaBroken, pqcProtected);
+        log.warn("📊 ATTACK COMPLETE: {} encryptions broken, {} signatures forged, {} PQC protected", 
+                rsaEncryptionBroken, rsaSignatureForged, pqcEncryptionProtected + pqcSignatureProtected);
         
         return report;
     }
 
     /**
-     * Attack a single intercepted transaction
+     * Attack ENCRYPTION algorithm (Key Encapsulation)
      */
-    private AttackResult attackTransaction(InterceptedTransaction tx) {
+    private AttackResult attackEncryption(InterceptedTransaction tx) {
         AttackResult result = new AttackResult();
         result.setDocumentId(tx.getDocumentId());
         result.setDocumentType(tx.getDocumentType());
         result.setAlgorithm(tx.getEncryptionAlgorithm());
+        result.setTargetType("ENCRYPTION");
         
         String algo = tx.getEncryptionAlgorithm().toUpperCase();
         
         if (algo.contains("RSA")) {
-            // RSA is vulnerable to Shor's algorithm
             int keyBits = algo.contains("4096") ? 4096 : 2048;
             BigInteger fakeModulus = generateFakeRsaModulus(keyBits);
             
@@ -195,56 +228,119 @@ public class EncryptedDataHarvester {
                     quantumSimulator.simulateShorsAlgorithm(fakeModulus, keyBits);
             
             result.setDecrypted(shorsResult.isSuccess());
-            result.setAttackType("Shor's Algorithm");
+            result.setForged(false);
+            result.setAttackType("Shor's Algorithm (RSA Decryption)");
             result.setQubitsUsed(shorsResult.getQubitsRequired());
             result.setAttackTimeMs(shorsResult.getExecutionTimeMs());
-            result.setDetails(shorsResult.getMessage());
+            result.setDetails(shorsResult.getMessage() + " | RSA private key RECOVERED!");
             
             if (shorsResult.isSuccess()) {
-                result.setDecryptedPreview("[DECRYPTED] Document for " + tx.getApplicant() + 
-                        " - " + tx.getDocumentType());
+                result.setDecryptedPreview("🔓 [DECRYPTED] " + tx.getDocumentType() + " for " + tx.getApplicant());
             }
             
-        } else if (algo.contains("ML-KEM") || algo.contains("KYBER")) {
-            // ML-KEM is quantum-resistant
+        } else if (algo.contains("ML_KEM") || algo.contains("ML-KEM") || algo.contains("KYBER")) {
             CuQuantumGpuSimulator.LatticeAttackResult latticeResult = 
                     quantumSimulator.simulateLatticeAttack(algo, tx.getEncryptedPayload());
             
             result.setDecrypted(false);
-            result.setAttackType("Lattice Reduction (Quantum-Enhanced BKZ)");
-            result.setQubitsUsed(0);  // Lattice attacks don't use qubits directly
+            result.setForged(false);
+            result.setAttackType("Lattice Attack (BKZ)");
+            result.setQubitsUsed(0);
             result.setAttackTimeMs(latticeResult.getExecutionTimeMs());
-            result.setDetails(latticeResult.getMessage());
-            
-        } else if (algo.contains("ML-DSA") || algo.contains("DILITHIUM")) {
-            // ML-DSA signatures are quantum-resistant
-            result.setDecrypted(false);
-            result.setAttackType("Signature Forgery Attempt");
-            result.setDetails("ML-DSA signatures cannot be forged with quantum computers. " +
-                    "Based on Module-LWE hard problem.");
+            result.setDetails("🛡️ " + latticeResult.getMessage());
             
         } else if (algo.contains("AES")) {
-            // AES with Grover's algorithm
             result.setDecrypted(false);
-            result.setAttackType("Grover's Algorithm (Key Search)");
-            result.setDetails("AES-256 remains secure. Grover's provides sqrt speedup, " +
-                    "reducing security from 256-bit to 128-bit (still infeasible).");
+            result.setForged(false);
+            result.setAttackType("Grover's Algorithm");
+            result.setDetails("🛡️ AES-256 remains secure against quantum attacks.");
             
         } else {
             result.setDecrypted(false);
-            result.setAttackType("Unknown Algorithm");
-            result.setDetails("No quantum attack available for: " + algo);
+            result.setForged(false);
+            result.setAttackType("Unknown");
+            result.setDetails("❓ No attack for: " + algo);
         }
         
         return result;
     }
 
     /**
-     * Generate simulated encrypted data payload
+     * Attack SIGNATURE algorithm (Digital Signature Forgery)
+     */
+    private AttackResult attackSignature(InterceptedTransaction tx) {
+        AttackResult result = new AttackResult();
+        result.setDocumentId(tx.getDocumentId());
+        result.setDocumentType(tx.getDocumentType());
+        result.setAlgorithm(tx.getSignatureAlgorithm());
+        result.setTargetType("SIGNATURE");
+        
+        String algo = tx.getSignatureAlgorithm().toUpperCase();
+        
+        if (algo.contains("RSA")) {
+            int keyBits = algo.contains("4096") ? 4096 : 2048;
+            BigInteger fakeModulus = generateFakeRsaModulus(keyBits);
+            
+            CuQuantumGpuSimulator.ShorsAttackResult shorsResult = 
+                    quantumSimulator.simulateShorsAlgorithm(fakeModulus, keyBits);
+            
+            result.setDecrypted(false);
+            result.setForged(shorsResult.isSuccess());
+            result.setAttackType("Shor's Algorithm (Signature Forgery)");
+            result.setQubitsUsed(shorsResult.getQubitsRequired());
+            result.setAttackTimeMs(shorsResult.getExecutionTimeMs());
+            result.setDetails(shorsResult.getMessage() + " | Can FORGE any document!");
+            
+            if (shorsResult.isSuccess()) {
+                result.setDecryptedPreview("✍️ [FORGED] Can create fake " + tx.getDocumentType());
+            }
+            
+        } else if (algo.contains("ML_DSA") || algo.contains("ML-DSA") || algo.contains("DILITHIUM")) {
+            result.setDecrypted(false);
+            result.setForged(false);
+            result.setAttackType("Lattice Signature Attack");
+            result.setDetails("🛡️ ML-DSA signatures CANNOT be forged by quantum computers!");
+            
+        } else if (algo.contains("SLH_DSA") || algo.contains("SPHINCS")) {
+            result.setDecrypted(false);
+            result.setForged(false);
+            result.setAttackType("Hash-Based Attack");
+            result.setDetails("🛡️ SLH-DSA is hash-based and quantum-resistant!");
+            
+        } else if (algo.contains("ECDSA")) {
+            result.setDecrypted(false);
+            result.setForged(true);
+            result.setAttackType("Shor's Algorithm (ECDSA)");
+            result.setDetails("⚠️ ECDSA private key RECOVERED!");
+            result.setDecryptedPreview("✍️ [FORGED] ECDSA signature compromised");
+            
+        } else {
+            result.setDecrypted(false);
+            result.setForged(false);
+            result.setAttackType("Unknown");
+            result.setDetails("❓ No attack for signature: " + algo);
+        }
+        
+        return result;
+    }
+
+    /**
+     * Generate simulated encrypted data payload (KEM ciphertext)
      */
     private byte[] generateSimulatedEncryptedData(String algorithm) {
         // Generate realistic-looking encrypted data
-        int size = algorithm.contains("ML-KEM") ? 1088 : 256;  // ML-KEM has larger ciphertexts
+        int size = algorithm.contains("ML_KEM") || algorithm.contains("ML-KEM") ? 1088 : 256;
+        byte[] data = new byte[size];
+        secureRandom.nextBytes(data);
+        return data;
+    }
+
+    /**
+     * Generate simulated digital signature data
+     */
+    private byte[] generateSimulatedSignatureData(String algorithm) {
+        // ML-DSA signatures are ~3293 bytes, RSA-2048 is 256 bytes
+        int size = algorithm.contains("ML_DSA") || algorithm.contains("ML-DSA") ? 3293 : 256;
         byte[] data = new byte[size];
         secureRandom.nextBytes(data);
         return data;
@@ -325,10 +421,13 @@ public class EncryptedDataHarvester {
         private String documentType;
         private String applicant;
         private String encryptionAlgorithm;
+        private String signatureAlgorithm;
         private String status;
         private LocalDateTime interceptedAt;
         private byte[] encryptedPayload;
+        private byte[] signatureData;
         private KeyMetadata keyMetadata;
+        private KeyMetadata signatureKeyMetadata;
     }
 
     @Data
@@ -347,7 +446,8 @@ public class EncryptedDataHarvester {
         private CuQuantumGpuSimulator.GpuInfo gpuInfo;
         private int totalTargets;
         private List<AttackResult> attackResults;
-        private int rsaKeysBroken;
+        private int rsaKeysBroken;           // Encryption keys broken
+        private int rsaSignaturesForged;     // Signatures that can be forged
         private int pqcProtectedCount;
         private String overallResult;
         private String severity;
@@ -358,8 +458,10 @@ public class EncryptedDataHarvester {
         private String documentId;
         private String documentType;
         private String algorithm;
+        private String targetType;           // "ENCRYPTION" or "SIGNATURE"
         private String attackType;
-        private boolean decrypted;
+        private boolean decrypted;           // For encryption attacks
+        private boolean forged;              // For signature attacks
         private int qubitsUsed;
         private long attackTimeMs;
         private String details;

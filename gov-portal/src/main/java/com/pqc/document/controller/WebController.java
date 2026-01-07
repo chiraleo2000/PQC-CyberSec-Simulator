@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
@@ -115,12 +116,29 @@ public class WebController {
             @RequestParam String vehicleMake,
             @RequestParam String vehicleYear,
             @RequestParam(defaultValue = "RSA_2048") String encryptionType,
+            @RequestParam(defaultValue = "RSA_2048") String signatureType,
             RedirectAttributes redirectAttributes) {
         
         User user = getCurrentUser();
         if (user == null) {
             return "redirect:/login";
         }
+
+        // Determine encryption algorithm from user selection
+        CryptoAlgorithm encryptionAlgorithm = switch(encryptionType) {
+            case "ML_KEM" -> CryptoAlgorithm.ML_KEM;
+            case "AES_256" -> CryptoAlgorithm.AES_256;
+            case "AES_128" -> CryptoAlgorithm.AES_128;
+            default -> CryptoAlgorithm.RSA_2048;
+        };
+        
+        // Determine signature algorithm from user selection  
+        CryptoAlgorithm signatureAlgorithm = switch(signatureType) {
+            case "ML_DSA" -> CryptoAlgorithm.ML_DSA;
+            case "SLH_DSA" -> CryptoAlgorithm.SLH_DSA;
+            case "ECDSA_P256" -> CryptoAlgorithm.ECDSA_P256;
+            default -> CryptoAlgorithm.RSA_2048;
+        };
 
         String content = String.format("""
             ╔══════════════════════════════════════════════════════════════╗
@@ -138,13 +156,11 @@ public class WebController {
             ║ Vehicle Year:   %s
             ╠══════════════════════════════════════════════════════════════╣
             ║ Encryption:     %s
+            ║ Signature:      %s
             ║ Submitted:      %s
             ╚══════════════════════════════════════════════════════════════╝
             """, fullName, dob, address, licenseType, vehiclePlate, vehicleMake, vehicleYear,
-            encryptionType, LocalDateTime.now());
-
-        CryptoAlgorithm algorithm = "ML_KEM".equals(encryptionType) ? 
-            CryptoAlgorithm.ML_KEM : CryptoAlgorithm.RSA_2048;
+            encryptionAlgorithm.getDisplayName(), signatureAlgorithm.getDisplayName(), LocalDateTime.now());
 
         Document doc = Document.builder()
                 .documentId("CAR-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
@@ -152,18 +168,20 @@ public class WebController {
                 .title("Car License Application - " + fullName)
                 .content(content)
                 .applicant(user)
-                .signatureAlgorithm(algorithm)
+                .encryptionAlgorithm(encryptionAlgorithm)
+                .signatureAlgorithm(signatureAlgorithm)
                 .status(Document.DocumentStatus.PENDING)
                 .build();
 
         documentRepository.save(doc);
         
-        log.info("📋 Car License Application submitted by {} [Algorithm: {}]", 
-                user.getUsername(), algorithm);
+        log.info("📋 Car License Application submitted by {} [Encryption: {}, Signature: {}]", 
+                user.getUsername(), encryptionAlgorithm, signatureAlgorithm);
 
         redirectAttributes.addFlashAttribute("success", 
             "Car License Application submitted successfully! Document ID: " + doc.getDocumentId());
-        redirectAttributes.addFlashAttribute("encryptionUsed", encryptionType);
+        redirectAttributes.addFlashAttribute("encryptionUsed", encryptionAlgorithm.getDisplayName());
+        redirectAttributes.addFlashAttribute("signatureUsed", signatureAlgorithm.getDisplayName());
         
         return "redirect:/dashboard";
     }
@@ -190,12 +208,29 @@ public class WebController {
             @RequestParam String taxOwed,
             @RequestParam String bankAccount,
             @RequestParam(defaultValue = "RSA_2048") String encryptionType,
+            @RequestParam(defaultValue = "RSA_2048") String signatureType,
             RedirectAttributes redirectAttributes) {
         
         User user = getCurrentUser();
         if (user == null) {
             return "redirect:/login";
         }
+
+        // Determine encryption algorithm from user selection
+        CryptoAlgorithm encryptionAlgorithm = switch(encryptionType) {
+            case "ML_KEM" -> CryptoAlgorithm.ML_KEM;
+            case "AES_256" -> CryptoAlgorithm.AES_256;
+            case "AES_128" -> CryptoAlgorithm.AES_128;
+            default -> CryptoAlgorithm.RSA_2048;
+        };
+        
+        // Determine signature algorithm from user selection  
+        CryptoAlgorithm signatureAlgorithm = switch(signatureType) {
+            case "ML_DSA" -> CryptoAlgorithm.ML_DSA;
+            case "SLH_DSA" -> CryptoAlgorithm.SLH_DSA;
+            case "ECDSA_P256" -> CryptoAlgorithm.ECDSA_P256;
+            default -> CryptoAlgorithm.RSA_2048;
+        };
 
         String content = String.format("""
             ╔══════════════════════════════════════════════════════════════╗
@@ -213,14 +248,12 @@ public class WebController {
             ║ Bank Account:   ****%s (Direct Deposit)
             ╠══════════════════════════════════════════════════════════════╣
             ║ Encryption:     %s
+            ║ Signature:      %s
             ║ Filed:          %s
             ╚══════════════════════════════════════════════════════════════╝
             """, filingYear, fullName, taxId, grossIncome, deductions, taxOwed,
             bankAccount.length() > 4 ? bankAccount.substring(bankAccount.length() - 4) : bankAccount,
-            encryptionType, LocalDateTime.now());
-
-        CryptoAlgorithm algorithm = "ML_KEM".equals(encryptionType) ? 
-            CryptoAlgorithm.ML_KEM : CryptoAlgorithm.RSA_2048;
+            encryptionAlgorithm.getDisplayName(), signatureAlgorithm.getDisplayName(), LocalDateTime.now());
 
         Document doc = Document.builder()
                 .documentId("TAX-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
@@ -228,18 +261,20 @@ public class WebController {
                 .title("Tax Filing " + filingYear + " - " + fullName)
                 .content(content)
                 .applicant(user)
-                .signatureAlgorithm(algorithm)
+                .encryptionAlgorithm(encryptionAlgorithm)
+                .signatureAlgorithm(signatureAlgorithm)
                 .status(Document.DocumentStatus.PENDING)
                 .build();
 
         documentRepository.save(doc);
         
-        log.info("💰 Tax Filing submitted by {} for year {} [Algorithm: {}]", 
-                user.getUsername(), filingYear, algorithm);
+        log.info("💰 Tax Filing submitted by {} for year {} [Encryption: {}, Signature: {}]", 
+                user.getUsername(), filingYear, encryptionAlgorithm, signatureAlgorithm);
 
         redirectAttributes.addFlashAttribute("success", 
             "Tax Filing submitted successfully! Document ID: " + doc.getDocumentId());
-        redirectAttributes.addFlashAttribute("encryptionUsed", encryptionType);
+        redirectAttributes.addFlashAttribute("encryptionUsed", encryptionAlgorithm.getDisplayName());
+        redirectAttributes.addFlashAttribute("signatureUsed", signatureAlgorithm.getDisplayName());
         
         return "redirect:/dashboard";
     }
@@ -312,19 +347,23 @@ public class WebController {
 
     @GetMapping("/api/transactions")
     @ResponseBody
+    @Transactional(readOnly = true)
     public List<TransactionLog> getTransactionLog() {
         List<Document> recentDocs = documentRepository.findTop20ByOrderByCreatedAtDesc();
         return recentDocs.stream().map(doc -> {
-            // Get encryption algorithm from the applicant's preferred settings
-            String encryptionAlgo = "RSA-2048";  // Default to vulnerable encryption for demo
-            if (doc.getApplicant() != null && doc.getApplicant().getPreferredEncryptionAlgorithm() != null) {
-                encryptionAlgo = doc.getApplicant().getPreferredEncryptionAlgorithm().name();
+            // Get the ACTUAL encryption algorithm used for this document
+            String encryptionAlgo = "RSA-2048";  // Default
+            if (doc.getEncryptionAlgorithm() != null) {
+                encryptionAlgo = doc.getEncryptionAlgorithm().getDisplayName();
+            } else if (doc.getApplicant() != null && doc.getApplicant().getPreferredEncryptionAlgorithm() != null) {
+                // Fallback to user's preferred algorithm for old documents
+                encryptionAlgo = doc.getApplicant().getPreferredEncryptionAlgorithm().getDisplayName();
             }
-            // If signature is PQC, encryption should also be PQC
-            if (doc.getSignatureAlgorithm() != null && 
-                (doc.getSignatureAlgorithm().name().contains("ML_DSA") || 
-                 doc.getSignatureAlgorithm().name().contains("ML_KEM"))) {
-                encryptionAlgo = "ML-KEM-768";
+            
+            // Get the ACTUAL signature algorithm used for this document
+            String signatureAlgo = "RSA-2048";  // Default
+            if (doc.getSignatureAlgorithm() != null) {
+                signatureAlgo = doc.getSignatureAlgorithm().getDisplayName();
             }
             
             return new TransactionLog(
@@ -332,7 +371,9 @@ public class WebController {
                 doc.getDocumentType().getDisplayName(),
                 doc.getApplicant() != null ? doc.getApplicant().getUsername() : "Unknown",
                 encryptionAlgo,
-                doc.getSignatureAlgorithm() != null ? doc.getSignatureAlgorithm().name() : "NONE",
+                doc.getEncryptionAlgorithm() != null ? doc.getEncryptionAlgorithm().name() : "RSA_2048",
+                signatureAlgo,
+                doc.getSignatureAlgorithm() != null ? doc.getSignatureAlgorithm().name() : "RSA_2048",
                 doc.getStatus().name(),
                 doc.getCreatedAt()
             );
@@ -358,8 +399,10 @@ public class WebController {
         String documentId, 
         String type, 
         String applicant, 
-        String encryption,
-        String signature,
+        String encryptionAlgorithmName,
+        String encryptionAlgorithm,
+        String signatureAlgorithmName,
+        String signatureAlgorithm,
         String status,
         LocalDateTime timestamp
     ) {}

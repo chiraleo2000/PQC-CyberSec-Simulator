@@ -175,6 +175,84 @@
             font-size: 1em;
         }
         
+        /* Progress Bar Styles */
+        .attack-progress {
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #ff6600;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+        
+        .attack-progress h4 {
+            color: #ff6600;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .progress-bar-container {
+            background: #222;
+            border-radius: 10px;
+            height: 24px;
+            overflow: hidden;
+            margin: 10px 0;
+            position: relative;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6600, #ff0040);
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+        
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            text-shadow: 0 0 5px black;
+            font-size: 0.9em;
+        }
+        
+        .progress-step {
+            color: #00ccff;
+            font-size: 0.85em;
+            margin-top: 8px;
+        }
+        
+        /* Attack Summary */
+        .attack-summary {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+        
+        .attack-summary h4 {
+            color: #ff6600;
+            margin-bottom: 10px;
+        }
+        
+        .summary-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .summary-stat:last-child { border-bottom: none; }
+        
+        .stat-label { color: #888; }
+        .stat-value { color: #00ccff; font-weight: bold; }
+        .stat-value.broken { color: #ff0040; }
+        .stat-value.protected { color: #00ff00; }
+        
         .decrypted-field {
             display: flex;
             padding: 5px 0;
@@ -414,6 +492,69 @@
         let autoRefreshInterval = null;
         let gpuInfo = null;
         
+        /**
+         * Convert algorithm enum name to display name.
+         * HarvestedData entity returns 'algorithm' field with enum name (RSA_2048, ML_KEM, etc.)
+         */
+        function formatAlgorithmName(algo) {
+            if (!algo) return 'RSA-2048';
+            const upper = algo.toUpperCase();
+            
+            // Check for PQC algorithms first
+            if (upper === 'ML_KEM' || upper === 'ML-KEM' || upper.includes('KYBER')) {
+                return 'ML-KEM-768';
+            }
+            if (upper === 'ML_DSA' || upper === 'ML-DSA' || upper.includes('DILITHIUM')) {
+                return 'ML-DSA-65';
+            }
+            if (upper.includes('SLH_DSA') || upper.includes('SPHINCS')) {
+                return 'SLH-DSA-128';
+            }
+            
+            // Classical algorithms
+            if (upper === 'RSA_4096' || upper === 'RSA-4096') {
+                return 'RSA-4096';
+            }
+            if (upper === 'RSA_2048' || upper === 'RSA-2048' || upper.includes('RSA')) {
+                return 'RSA-2048';
+            }
+            if (upper.includes('AES_256') || upper.includes('AES-256')) {
+                return 'AES-256';
+            }
+            if (upper.includes('AES')) {
+                return 'AES-128';
+            }
+            
+            return algo.replace(/_/g, '-');
+        }
+        
+        /**
+         * Get the encryption algorithm name from a packet.
+         * HarvestedData uses 'algorithm' field, not 'encryptionAlgorithm'.
+         */
+        function getEncryptionAlgo(packet) {
+            // The HarvestedData entity has 'algorithm' (enum name)
+            // and 'algorithmDetails' (string with more info)
+            const algo = packet.algorithm || packet.encryptionAlgorithm || 'RSA_2048';
+            return formatAlgorithmName(algo);
+        }
+        
+        /**
+         * Check if a packet uses quantum-vulnerable encryption.
+         */
+        function isVulnerablePacket(packet) {
+            // Use the entity's isQuantumResistant field if available
+            if (typeof packet.quantumResistant === 'boolean') {
+                return !packet.quantumResistant;
+            }
+            if (typeof packet.isQuantumResistant === 'boolean') {
+                return !packet.isQuantumResistant;
+            }
+            // Fallback: check algorithm name
+            const algo = getEncryptionAlgo(packet).toUpperCase();
+            return algo.includes('RSA') || algo.includes('AES');
+        }
+        
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadGpuStatus();
@@ -516,26 +657,26 @@
             }
             
             panel.innerHTML = interceptedData.map((packet, idx) => {
-                const isVulnerable = packet.encryptionAlgorithm && 
-                    (packet.encryptionAlgorithm.includes('RSA') || packet.encryptionAlgorithm.includes('rsa'));
+                const encAlgo = getEncryptionAlgo(packet);
+                const isVulnerable = isVulnerablePacket(packet);
                 const cipherClass = isVulnerable ? 'vulnerable' : 'safe';
                 const packetClass = isVulnerable ? 'rsa' : 'mlkem';
                 
                 // Generate hex representation of encrypted payload
-                const encryptedHex = generateEncryptedHex(packet.documentId || packet.id, packet.encryptionAlgorithm);
+                const encryptedHex = generateEncryptedHex(packet.targetId || packet.documentId || packet.id, encAlgo);
                 
                 return `
                     <div class="intercepted-packet ${packetClass}">
                         <div class="packet-header">
-                            <span>📦 Packet #${idx + 1} | ${packet.documentId || packet.id || 'Unknown'}</span>
-                            <span class="packet-cipher ${cipherClass}">${packet.encryptionAlgorithm || 'Unknown'}</span>
+                            <span>📦 Packet #${idx + 1} | ${packet.targetId || packet.documentId || packet.id || 'Unknown'}</span>
+                            <span class="packet-cipher ${cipherClass}">${encAlgo}</span>
                         </div>
                         <div class="encrypted-hex">
                             🔒 ${encryptedHex}
                         </div>
                         <div style="color: #666; font-size: 0.8em;">
-                            Source: gov-portal:8181 | Size: ${256 + idx * 64} bytes | 
-                            ${new Date(packet.interceptedAt || Date.now()).toLocaleTimeString()}
+                            Source: ${packet.sourceService || 'gov-portal:8181'} | Size: ${256 + idx * 64} bytes | 
+                            ${new Date(packet.harvestedAt || packet.interceptedAt || Date.now()).toLocaleTimeString()}
                         </div>
                         <div class="packet-actions">
                             ${isVulnerable ? 
@@ -576,48 +717,54 @@
             const packet = interceptedData[idx];
             if (!packet) return;
             
+            const encAlgo = getEncryptionAlgo(packet);
+            const isVuln = isVulnerablePacket(packet);
+            
             log(`⚛️ Initiating Shor's Algorithm attack on packet #${idx + 1}...`, 'warning');
-            log(`Target: ${packet.encryptionAlgorithm} encryption`, 'info');
-            log(`Loading quantum circuit (4099 qubits for RSA-2048)...`, 'info');
+            log(`Target: ${encAlgo} encryption`, 'info');
+            
+            // Show progress bar in results panel
+            showProgressBar(packet, encAlgo);
             
             try {
                 // Call the actual quantum attack API
                 const response = await fetch('/api/hacker/quantum-attack', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ targetId: packet.documentId || packet.id })
+                    body: JSON.stringify({ targetId: packet.targetId || packet.documentId || packet.id })
                 });
                 
                 const result = await response.json();
                 
-                // Simulate attack progress
+                // Simulate attack progress with percentage
                 await simulateAttackProgress();
                 
-                // Show result
-                if (result.rsaBroken > 0 || (result.results && result.results.some(r => r.decrypted))) {
-                    log(`💔 RSA-2048 BROKEN! Private key factored!`, 'success');
-                    showDecryptedData(packet, result);
-                } else {
-                    log(`Attack completed - check results panel`, 'info');
-                }
+                // ALWAYS show results after attack completes
+                showAttackResult(packet, result, isVuln);
                 
                 updateStats();
                 
             } catch (e) {
                 log(`Attack failed: ${e.message}`, 'error');
+                hideProgressBar();
+                showAttackError(packet, e.message);
             }
         }
         
         async function attackAllVulnerable() {
-            const vulnerable = interceptedData.filter(p => 
-                p.encryptionAlgorithm && p.encryptionAlgorithm.includes('RSA'));
+            const vulnerable = interceptedData.filter(p => isVulnerablePacket(p));
+            const safe = interceptedData.filter(p => !isVulnerablePacket(p));
             
-            if (vulnerable.length === 0) {
-                log('No RSA-vulnerable packets to attack', 'warning');
+            if (interceptedData.length === 0) {
+                log('No packets to attack - harvest data first!', 'warning');
                 return;
             }
             
-            log(`🚀 Launching quantum attack on ${vulnerable.length} RSA packets...`, 'warning');
+            log(`🚀 Launching quantum attack on ALL ${interceptedData.length} packets...`, 'warning');
+            log(`   📊 ${vulnerable.length} vulnerable (RSA) + ${safe.length} protected (PQC)`, 'info');
+            
+            // Show bulk progress bar
+            showBulkProgressBar(interceptedData.length);
             
             try {
                 const response = await fetch('/api/hacker/quantum-attack', {
@@ -625,95 +772,236 @@
                 });
                 const result = await response.json();
                 
+                // Simulate attack progress with percentage
                 await simulateAttackProgress();
                 
-                if (result.rsaBroken > 0) {
-                    log(`💔 ${result.rsaBroken} RSA keys BROKEN!`, 'success');
-                    showBulkDecryptedData(result);
-                }
-                
-                if (result.pqcProtected > 0) {
-                    log(`🛡️ ${result.pqcProtected} packets protected by PQC`, 'info');
-                }
+                // ALWAYS show complete results
+                showBulkAttackResults(result, vulnerable.length, safe.length);
                 
                 updateStats();
                 
             } catch (e) {
                 log(`Bulk attack failed: ${e.message}`, 'error');
+                hideProgressBar();
+                showAttackError(null, e.message);
             }
         }
         
         async function simulateAttackProgress() {
             const steps = [
-                'Creating quantum superposition...',
-                'Applying Hadamard gates...',
-                'Executing modular exponentiation...',
-                'Running Quantum Fourier Transform...',
-                'Measuring qubits...',
-                'Computing GCD for factors...'
+                { pct: 5, msg: 'Initializing quantum register (4,099 qubits)...' },
+                { pct: 15, msg: 'Creating quantum superposition...' },
+                { pct: 25, msg: 'Applying Hadamard gates...' },
+                { pct: 40, msg: 'Loading RSA modulus into quantum memory...' },
+                { pct: 55, msg: 'Executing modular exponentiation oracle...' },
+                { pct: 70, msg: 'Running Quantum Fourier Transform...' },
+                { pct: 85, msg: 'Measuring qubits for period finding...' },
+                { pct: 95, msg: 'Computing GCD for prime factors...' },
+                { pct: 100, msg: 'Attack complete!' }
             ];
             
             for (const step of steps) {
-                log(`[SHOR] ${step}`, 'info');
-                await new Promise(r => setTimeout(r, 500));
+                updateProgressBar(step.pct);
+                log(`[SHOR ${step.pct}%] ${step.msg}`, step.pct === 100 ? 'success' : 'info');
+                await new Promise(r => setTimeout(r, 350));
             }
         }
         
-        function showDecryptedData(packet, result) {
+        function showProgressBar(packet, encAlgo) {
             const panel = document.getElementById('attackResultsPanel');
+            const packetId = packet.targetId || packet.documentId || packet.id || 'Unknown';
             
-            const decryptedHtml = `
-                <div class="decrypted-data">
-                    <h3>💔 DECRYPTED - ${packet.documentType || 'Document'}</h3>
-                    <div class="decrypted-field">
-                        <span class="field-label">Doc ID:</span>
-                        <span class="field-value">${packet.documentId || packet.id}</span>
+            panel.innerHTML = `
+                <div class="attack-progress" id="activeProgress">
+                    <h4>
+                        <span>⚛️ QUANTUM ATTACK IN PROGRESS</span>
+                        <span id="progressPct">0%</span>
+                    </h4>
+                    <div style="color: #888; font-size: 0.85em; margin-bottom: 10px;">
+                        Target: ${packetId} | Algorithm: ${encAlgo}
                     </div>
-                    <div class="decrypted-field">
-                        <span class="field-label">Applicant:</span>
-                        <span class="field-value">${packet.applicant || 'Unknown'}</span>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                        <span class="progress-text" id="progressText">0%</span>
                     </div>
-                    <div class="decrypted-field">
-                        <span class="field-label">Broken Cipher:</span>
-                        <span class="field-value">${packet.encryptionAlgorithm}</span>
-                    </div>
-                    <div class="decrypted-field">
-                        <span class="field-label">Attack Time:</span>
-                        <span class="field-value">${result.attackTimeMs || '~3000'}ms</span>
-                    </div>
-                    <p style="color: #ff6666; margin-top: 10px; font-size: 0.9em;">
-                        ⚠️ All personal data in this document is now EXPOSED!
-                    </p>
+                    <div class="progress-step" id="progressStep">Initializing...</div>
                 </div>
-            `;
-            
-            panel.innerHTML = decryptedHtml + panel.innerHTML;
-            document.getElementById('decryptedCount').textContent = 
-                parseInt(document.getElementById('decryptedCount').textContent) + 1;
+            ` + panel.innerHTML.replace(/<div class="attack-progress"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/g, '');
         }
         
-        function showBulkDecryptedData(result) {
+        function showBulkProgressBar(totalCount) {
             const panel = document.getElementById('attackResultsPanel');
+            
+            panel.innerHTML = `
+                <div class="attack-progress" id="activeProgress">
+                    <h4>
+                        <span>⚛️ BULK QUANTUM ATTACK</span>
+                        <span id="progressPct">0%</span>
+                    </h4>
+                    <div style="color: #888; font-size: 0.85em; margin-bottom: 10px;">
+                        Attacking ${totalCount} intercepted packets with Shor's Algorithm
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                        <span class="progress-text" id="progressText">0%</span>
+                    </div>
+                    <div class="progress-step" id="progressStep">Initializing quantum computer...</div>
+                </div>
+            `;
+        }
+        
+        function updateProgressBar(pct) {
+            const bar = document.getElementById('progressBar');
+            const text = document.getElementById('progressText');
+            const pctSpan = document.getElementById('progressPct');
+            
+            if (bar) bar.style.width = pct + '%';
+            if (text) text.textContent = pct + '%';
+            if (pctSpan) pctSpan.textContent = pct + '%';
+        }
+        
+        function hideProgressBar() {
+            const progress = document.getElementById('activeProgress');
+            if (progress) progress.remove();
+        }
+        
+        function showAttackResult(packet, result, isVulnerable) {
+            hideProgressBar();
+            const panel = document.getElementById('attackResultsPanel');
+            const encAlgo = getEncryptionAlgo(packet);
+            const packetId = packet.targetId || packet.documentId || packet.id || 'Unknown';
+            const applicant = packet.originalSender || packet.applicant || 'Unknown';
+            
+            // Get attack details from the API response
+            const attackData = result.attack || result;
+            const summary = result.summary || {};
+            const rsaBroken = summary.rsaBroken || attackData.rsaKeysBroken || 0;
+            const sigForged = attackData.rsaSignaturesForged || 0;
+            const pqcProtected = summary.pqcProtected || attackData.pqcProtectedCount || 0;
+            const attackResults = attackData.attackResults || [];
             
             let html = '';
             
-            if (result.results) {
-                result.results.forEach(r => {
-                    if (r.decrypted) {
+            if (isVulnerable) {
+                // RSA was broken!
+                log(`💔 RSA-2048 BROKEN! Private key factored!`, 'success');
+                html = `
+                    <div class="decrypted-data">
+                        <h3>💔 DECRYPTED - RSA BROKEN!</h3>
+                        <div class="decrypted-field">
+                            <span class="field-label">Document ID:</span>
+                            <span class="field-value">${packetId}</span>
+                        </div>
+                        <div class="decrypted-field">
+                            <span class="field-label">Applicant:</span>
+                            <span class="field-value">${applicant}</span>
+                        </div>
+                        <div class="decrypted-field">
+                            <span class="field-label">Broken Cipher:</span>
+                            <span class="field-value">${encAlgo}</span>
+                        </div>
+                        <div class="decrypted-field">
+                            <span class="field-label">Attack Type:</span>
+                            <span class="field-value">Shor's Algorithm (Quantum Factoring)</span>
+                        </div>
+                        <div class="decrypted-field">
+                            <span class="field-label">Qubits Used:</span>
+                            <span class="field-value">~4,099 (simulated)</span>
+                        </div>
+                        <p style="color: #ff6666; margin-top: 10px; font-size: 0.9em; border-top: 1px solid #ff0040; padding-top: 10px;">
+                            ⚠️ ALL DATA IN THIS DOCUMENT IS NOW EXPOSED!<br>
+                            Private key recovered → Can decrypt all past & future messages!
+                        </p>
+                    </div>
+                `;
+                document.getElementById('decryptedCount').textContent = 
+                    parseInt(document.getElementById('decryptedCount').textContent || 0) + 1;
+            } else {
+                // PQC protected!
+                log(`🛡️ Attack FAILED - ${encAlgo} is quantum-resistant!`, 'info');
+                html = `
+                    <div class="protected-data">
+                        <h3>🛡️ PROTECTED - QUANTUM RESISTANT!</h3>
+                        <p style="color: #00cc00;">Algorithm: <strong>${encAlgo}</strong></p>
+                        <p style="color: #888; font-size: 0.9em; margin-top: 10px;">
+                            Shor's Algorithm FAILED!<br>
+                            Lattice-based cryptography remains computationally infeasible.<br>
+                            Data remains CONFIDENTIAL.
+                        </p>
+                    </div>
+                `;
+            }
+            
+            panel.innerHTML = html + panel.innerHTML;
+        }
+        
+        function showBulkAttackResults(result, vulnerableCount, safeCount) {
+            hideProgressBar();
+            const panel = document.getElementById('attackResultsPanel');
+            
+            // Parse API response (handles nested structure)
+            const attackData = result.attack || result;
+            const summary = result.summary || {};
+            const rsaBroken = summary.rsaBroken || attackData.rsaKeysBroken || vulnerableCount;
+            const sigForged = attackData.rsaSignaturesForged || 0;
+            const pqcProtected = summary.pqcProtected || attackData.pqcProtectedCount || safeCount;
+            const severity = summary.severity || attackData.severity || 'UNKNOWN';
+            const overallResult = summary.result || attackData.overallResult || '';
+            const attackResults = attackData.attackResults || [];
+            
+            log(`💔 ${rsaBroken} RSA encryptions BROKEN!`, rsaBroken > 0 ? 'success' : 'info');
+            if (sigForged > 0) log(`✍️ ${sigForged} RSA signatures FORGED!`, 'success');
+            log(`🛡️ ${pqcProtected} packets PROTECTED by PQC`, 'info');
+            
+            // Build summary HTML
+            let html = `
+                <div class="attack-summary">
+                    <h4>⚛️ QUANTUM ATTACK COMPLETE</h4>
+                    <div class="summary-stat">
+                        <span class="stat-label">Total Targets:</span>
+                        <span class="stat-value">${vulnerableCount + safeCount}</span>
+                    </div>
+                    <div class="summary-stat">
+                        <span class="stat-label">🔓 RSA Encryptions Broken:</span>
+                        <span class="stat-value broken">${rsaBroken}</span>
+                    </div>
+                    <div class="summary-stat">
+                        <span class="stat-label">✍️ RSA Signatures Forged:</span>
+                        <span class="stat-value broken">${sigForged}</span>
+                    </div>
+                    <div class="summary-stat">
+                        <span class="stat-label">🛡️ PQC Protected:</span>
+                        <span class="stat-value protected">${pqcProtected}</span>
+                    </div>
+                    <div class="summary-stat">
+                        <span class="stat-label">Severity:</span>
+                        <span class="stat-value ${severity === 'CRITICAL' ? 'broken' : 'protected'}">${severity}</span>
+                    </div>
+                </div>
+            `;
+            
+            // Add individual results
+            if (attackResults.length > 0) {
+                attackResults.forEach(r => {
+                    if (r.decrypted || r.forged) {
                         html += `
                             <div class="decrypted-data">
-                                <h3>💔 DECRYPTED - ${r.documentType || 'Document'}</h3>
+                                <h3>${r.forged ? '✍️ FORGED' : '💔 DECRYPTED'} - ${r.documentType || 'Document'}</h3>
                                 <div class="decrypted-field">
-                                    <span class="field-label">Doc ID:</span>
-                                    <span class="field-value">${r.documentId}</span>
+                                    <span class="field-label">Target:</span>
+                                    <span class="field-value">${r.targetType || 'ENCRYPTION'}</span>
+                                </div>
+                                <div class="decrypted-field">
+                                    <span class="field-label">Algorithm:</span>
+                                    <span class="field-value">${r.algorithm}</span>
                                 </div>
                                 <div class="decrypted-field">
                                     <span class="field-label">Attack:</span>
-                                    <span class="field-value">${r.attackType}</span>
+                                    <span class="field-value">${r.attackType || "Shor's Algorithm"}</span>
                                 </div>
                                 <div class="decrypted-field">
-                                    <span class="field-label">Time:</span>
-                                    <span class="field-value">${r.attackTimeMs}ms</span>
+                                    <span class="field-label">Qubits:</span>
+                                    <span class="field-value">${r.qubitsUsed || '~4,099'}</span>
                                 </div>
                             </div>
                         `;
@@ -721,21 +1009,72 @@
                         html += `
                             <div class="protected-data">
                                 <h3>🛡️ PROTECTED - ${r.documentType || 'Document'}</h3>
-                                <p>Attack FAILED - ${r.algorithm} is quantum-resistant</p>
+                                <p style="margin: 5px 0;">Target: ${r.targetType || 'ENCRYPTION'} | Algo: ${r.algorithm}</p>
+                                <p style="color: #00cc00; font-size: 0.9em;">
+                                    ${r.details || 'Quantum-resistant algorithm - attack FAILED!'}
+                                </p>
                             </div>
                         `;
                     }
                 });
+            } else {
+                // No detailed results from API, show based on counts
+                if (rsaBroken > 0) {
+                    html += `
+                        <div class="decrypted-data">
+                            <h3>💔 ${rsaBroken} RSA DOCUMENT(S) COMPROMISED</h3>
+                            <p style="color: #ff6666;">
+                                Shor's Algorithm successfully factored RSA modulus!<br>
+                                All RSA-encrypted documents can now be decrypted.
+                            </p>
+                        </div>
+                    `;
+                }
+                if (pqcProtected > 0) {
+                    html += `
+                        <div class="protected-data">
+                            <h3>🛡️ ${pqcProtected} PQC DOCUMENT(S) SECURE</h3>
+                            <p style="color: #00cc00;">
+                                ML-KEM/ML-DSA remain quantum-resistant!<br>
+                                Lattice problems are computationally infeasible.
+                            </p>
+                        </div>
+                    `;
+                }
             }
             
-            panel.innerHTML = html || panel.innerHTML;
-            document.getElementById('decryptedCount').textContent = result.rsaBroken || 0;
+            panel.innerHTML = html;
+            document.getElementById('decryptedCount').textContent = rsaBroken;
+        }
+        
+        function showAttackError(packet, errorMsg) {
+            const panel = document.getElementById('attackResultsPanel');
+            panel.innerHTML = `
+                <div class="attack-summary" style="border-color: #ff0040;">
+                    <h4 style="color: #ff0040;">⚠️ ATTACK ERROR</h4>
+                    <p style="color: #ff6666;">${errorMsg}</p>
+                    <p style="color: #888; font-size: 0.9em; margin-top: 10px;">
+                        Check quantum simulator connectivity and try again.
+                    </p>
+                </div>
+            ` + panel.innerHTML;
+        }
+        
+        // Legacy function kept for compatibility
+        function showDecryptedData(packet, result) {
+            showAttackResult(packet, result, isVulnerablePacket(packet));
+        }
+        
+        // Legacy function kept for compatibility  
+        function showBulkDecryptedData(result) {
+            const vulnerable = interceptedData.filter(p => isVulnerablePacket(p)).length;
+            const safe = interceptedData.length - vulnerable;
+            showBulkAttackResults(result, vulnerable, safe);
         }
         
         function updateStats() {
             const total = interceptedData.length;
-            const vulnerable = interceptedData.filter(p => 
-                p.encryptionAlgorithm && p.encryptionAlgorithm.includes('RSA')).length;
+            const vulnerable = interceptedData.filter(p => isVulnerablePacket(p)).length;
             const safe = total - vulnerable;
             
             document.getElementById('totalPackets').textContent = total;

@@ -15,6 +15,10 @@ import java.util.Optional;
 public interface HarvestedDataRepository extends JpaRepository<HarvestedData, Long> {
 
     Optional<HarvestedData> findByHarvestId(String harvestId);
+    
+    Optional<HarvestedData> findByTargetId(String targetId);
+    
+    boolean existsByTargetId(String targetId);
 
     List<HarvestedData> findByStatus(HarvestStatus status);
 
