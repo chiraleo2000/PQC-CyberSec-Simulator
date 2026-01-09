@@ -50,31 +50,96 @@ HACKER_PID=""
 QS_PID=""
 USE_DOCKER=false
 
-# Cleanup function
+# Auto-shutdown timeout in seconds (5 minutes = 300 seconds)
+AUTO_SHUTDOWN_TIMEOUT=300
+LAST_ACTIVITY_TIME=$(date +%s)
+
+# Function to clean GPU VRAM
+clean_gpu() {
+    echo -e "  ${CYAN}Releasing GPU VRAM...${NC}"
+    if [ -f "$SCRIPT_DIR/Clear_GPU.py" ]; then
+        if command -v python3 &> /dev/null; then
+            python3 "$SCRIPT_DIR/Clear_GPU.py" 2>/dev/null && echo -e "  ${GREEN}[OK] GPU VRAM released${NC}" || true
+        elif command -v python &> /dev/null; then
+            python "$SCRIPT_DIR/Clear_GPU.py" 2>/dev/null && echo -e "  ${GREEN}[OK] GPU VRAM released${NC}" || true
+        fi
+    fi
+    # Also try to release via CuPy if available
+    if command -v python3 &> /dev/null; then
+        python3 -c "
+try:
+    import cupy as cp
+    mempool = cp.get_default_memory_pool()
+    mempool.free_all_blocks()
+    print('  CuPy memory pool cleared')
+except:
+    pass
+" 2>/dev/null || true
+    fi
+}
+
+# Cleanup function with GPU VRAM release
 cleanup() {
     echo ""
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  SHUTTING DOWN ALL SERVICES...${NC}"
+    echo -e "${YELLOW}  SHUTTING DOWN ALL SERVICES AND CLEANING UP RESOURCES...${NC}"
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════════════════════════${NC}"
     
-    echo -e "  ${CYAN}Stopping Java services...${NC}"
+    echo -e "  ${CYAN}[1/5] Stopping Java services...${NC}"
     pkill -f "spring-boot:run" 2>/dev/null || true
     [ -n "$GOV_PID" ] && kill $GOV_PID 2>/dev/null || true
     [ -n "$HACKER_PID" ] && kill $HACKER_PID 2>/dev/null || true
     
-    echo -e "  ${CYAN}Stopping Quantum Simulator...${NC}"
+    echo -e "  ${CYAN}[2/5] Stopping Quantum Simulator...${NC}"
     pkill -f "quantum_service.py" 2>/dev/null || true
     [ -n "$QS_PID" ] && kill $QS_PID 2>/dev/null || true
     
+    echo -e "  ${CYAN}[3/5] Releasing network ports...${NC}"
+    # Kill any remaining processes on our ports
+    for port in 8181 8183 8184; do
+        pid=$(lsof -ti:$port 2>/dev/null)
+        [ -n "$pid" ] && kill -9 $pid 2>/dev/null || true
+    done
+    
     if $USE_DOCKER; then
-        echo -e "  ${CYAN}Stopping Docker containers...${NC}"
+        echo -e "  ${CYAN}[4/5] Stopping Docker containers...${NC}"
         docker-compose down 2>/dev/null || true
+    else
+        echo -e "  ${CYAN}[4/5] Docker not in use - skipping${NC}"
     fi
     
+    echo -e "  ${CYAN}[5/5] Releasing GPU VRAM...${NC}"
+    clean_gpu
+    
+    # Wait a moment for cleanup
+    sleep 2
+    
     echo ""
-    echo -e "${GREEN}  All services stopped.${NC}"
-    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}  ALL RESOURCES CLEANED UP!${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "  - All services stopped"
+    echo -e "  - Network ports released (8181, 8183, 8184)"
+    echo -e "  - GPU VRAM released"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════════════════════${NC}"
     exit 0
+}
+
+# Function to reset activity timer
+reset_activity_timer() {
+    LAST_ACTIVITY_TIME=$(date +%s)
+}
+
+# Function to check if auto-shutdown should trigger
+check_auto_shutdown() {
+    local current_time=$(date +%s)
+    local elapsed=$((current_time - LAST_ACTIVITY_TIME))
+    if [ $elapsed -ge $AUTO_SHUTDOWN_TIMEOUT ]; then
+        echo ""
+        echo -e "${YELLOW}[AUTO-SHUTDOWN] 5 minutes of inactivity detected - cleaning up resources...${NC}"
+        cleanup
+    fi
+    return $elapsed
 }
 
 # Function to open browser (cross-platform)
@@ -112,6 +177,8 @@ if $MANUAL_MODE; then
 else
     echo -e "  MODE: ${BLUE}AUTOMATED TESTING${NC} - Selenium tests will run automatically"
 fi
+echo -e "  ${YELLOW}AUTO-CLEANUP: Services will auto-shutdown after 5 minutes of inactivity${NC}"
+echo -e "  ${YELLOW}GPU CLEANUP: GPU VRAM will be released when services stop${NC}"
 echo "============================================================================================="
 echo ""
 
@@ -148,6 +215,18 @@ elif command -v python &> /dev/null; then
 else
     echo -e "   ${YELLOW}[WARN] Python not found - Quantum simulator will use simulation mode${NC}"
 fi
+
+# Clean up any existing processes and GPU memory before starting
+echo -e "   ${CYAN}Cleaning up existing processes and GPU memory...${NC}"
+pkill -f "spring-boot:run" 2>/dev/null || true
+pkill -f "quantum_service.py" 2>/dev/null || true
+for port in 8181 8183 8184; do
+    pid=$(lsof -ti:$port 2>/dev/null)
+    [ -n "$pid" ] && kill -9 $pid 2>/dev/null || true
+done
+# Clean GPU memory at startup
+clean_gpu
+echo -e "   ${GREEN}[OK] Cleanup complete${NC}"
 
 # Determine deployment mode
 if $FORCE_LOCAL; then
@@ -433,7 +512,7 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# KEEP RUNNING - Interactive Menu
+# KEEP RUNNING - Interactive Menu with Auto-Shutdown
 # ═══════════════════════════════════════════════════════════════════════════════
 echo ""
 echo "============================================================================================="
@@ -448,34 +527,68 @@ echo "  Logs available at:"
 echo "    - /tmp/gov-portal.log"
 echo "    - /tmp/hacker-console.log"
 echo "    - /tmp/quantum-simulator.log"
+echo ""
+echo -e "  ${YELLOW}AUTO-SHUTDOWN: Services will stop after 5 minutes of inactivity${NC}"
+echo -e "  ${YELLOW}GPU CLEANUP: GPU VRAM will be released on shutdown${NC}"
 echo "============================================================================================="
 echo ""
 
+# Reset activity timer
+reset_activity_timer
+
 while true; do
+    # Calculate remaining time before auto-shutdown
+    local current_time=$(date +%s)
+    local elapsed=$((current_time - LAST_ACTIVITY_TIME))
+    local remaining=$((AUTO_SHUTDOWN_TIMEOUT - elapsed))
+    
+    if [ $remaining -le 0 ]; then
+        echo ""
+        echo -e "${YELLOW}[AUTO-SHUTDOWN] 5 minutes of inactivity - cleaning up resources...${NC}"
+        cleanup
+    fi
+    
+    local mins=$((remaining / 60))
+    local secs=$((remaining % 60))
+    
     echo ""
-    echo -e "  ${CYAN}[O]${NC} Open browsers again"
-    echo -e "  ${CYAN}[T]${NC} Run automated tests now"
-    echo -e "  ${CYAN}[L]${NC} View logs"
-    echo -e "  ${RED}[Q]${NC} Quit and stop all services"
-    echo -e "  ${GREEN}[Enter]${NC} Keep services running (exit menu)"
+    echo -e "  ${YELLOW}Auto-shutdown in: ${mins}m ${secs}s${NC}"
+    echo -e "  ${CYAN}[O]${NC} Open browsers (resets timer)"
+    echo -e "  ${CYAN}[T]${NC} Run automated tests (resets timer)"
+    echo -e "  ${CYAN}[L]${NC} View logs (resets timer)"
+    echo -e "  ${CYAN}[R]${NC} Reset timer (keep services running)"
+    echo -e "  ${RED}[Q]${NC} Quit and cleanup resources"
+    echo -e "  ${GREEN}[Enter]${NC} Exit menu (services keep running, NO auto-shutdown)"
     echo ""
-    read -p "  Enter your choice: " USER_CHOICE
+    
+    # Read with 30-second timeout
+    read -t 30 -p "  Enter your choice: " USER_CHOICE
+    READ_STATUS=$?
+    
+    # If read timed out, continue loop to check auto-shutdown
+    if [ $READ_STATUS -ne 0 ]; then
+        continue
+    fi
     
     case "$USER_CHOICE" in
         [Oo])
+            reset_activity_timer
             echo "  Opening browsers..."
             open_browser "http://localhost:8181"
             open_browser "http://localhost:8183"
             open_browser "http://localhost:8183/decrypt"
-            echo "  Browsers opened!"
+            echo "  Browsers opened! Timer reset."
             ;;
         [Tt])
+            reset_activity_timer
             echo "  Running automated tests..."
             cd "$SCRIPT_DIR/ui-tests"
             mvn test -Dtest=com.pqc.selenium.ComprehensiveCryptoTest
             cd "$SCRIPT_DIR"
+            echo "  Tests complete! Timer reset."
             ;;
         [Ll])
+            reset_activity_timer
             echo ""
             echo "  Select log to view:"
             echo "    [1] Gov-Portal"
@@ -488,14 +601,21 @@ while true; do
                 3) tail -50 /tmp/quantum-simulator.log 2>/dev/null || echo "Log not available" ;;
             esac
             ;;
+        [Rr])
+            reset_activity_timer
+            echo "  Timer reset! Auto-shutdown postponed."
+            ;;
         [Qq])
             cleanup
             ;;
         "")
             echo ""
             echo -e "  ${GREEN}Services continue running in background.${NC}"
+            echo -e "  ${YELLOW}Auto-shutdown DISABLED - services will run until manually stopped.${NC}"
             echo "  You can close this terminal safely."
-            echo "  To stop services later, run: pkill -f spring-boot:run && pkill -f quantum_service.py"
+            echo "  To stop services later, run:"
+            echo "    pkill -f spring-boot:run && pkill -f quantum_service.py"
+            echo "  Or run this script again and choose [Q] to quit."
             echo ""
             exit 0
             ;;

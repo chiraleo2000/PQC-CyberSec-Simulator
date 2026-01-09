@@ -633,8 +633,9 @@ public class CuQuantumGpuSimulator {
         
         // Phase 4: Sieving attack attempt
         logProcess("PQC_PHASE4", "Phase 4: Quantum sieving attack", "INFO");
-        double sievingComplexity = Math.pow(2, 0.292 * latticeDimension);
-        logProcess("PQC_SIEVE", String.format("Sieving complexity: 2^%.1f operations - INFEASIBLE", 0.292 * latticeDimension), "INFO");
+        double sievingExponent = 0.292 * latticeDimension;
+        double sievingComplexity = Math.pow(2, sievingExponent);
+        logProcess("PQC_SIEVE", String.format("Sieving complexity: %.2e (2^%.1f) operations - INFEASIBLE", sievingComplexity, sievingExponent), "INFO");
         simulateGpuComputation(100);
 
         // Even with quantum computer, lattice security remains strong

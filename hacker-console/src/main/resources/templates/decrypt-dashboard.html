@@ -394,11 +394,50 @@
                 <div class="log-entry info">[SYSTEM] Connecting to cuQuantum GPU service...</div>
             </div>
             <div class="panel-header" style="border-top: 1px solid #333; background: rgba(255,100,0,0.1);">
-                🔥 GPU Process Log (Backend)
+                🔥 GPU Quantum Simulation Log (Real-Time)
                 <button onclick="clearLogs()" style="float: right; background: #ff3300; border: none; color: white; padding: 2px 8px; font-size: 10px; cursor: pointer; border-radius: 3px;">Clear</button>
             </div>
-            <div class="console-log" id="backendLog" style="background: #0a0505; border-left: 2px solid #ff6600; max-height: 120px;">
-                <div class="log-entry info">[GPU] Waiting for GPU process logs...</div>
+            <div class="console-log" id="backendLog" style="background: #0a0505; border-left: 2px solid #ff6600; max-height: 180px;">
+                <div class="log-entry info">[GPU] Connecting to cuQuantum GPU Simulator on port 8184...</div>
+            </div>
+            
+            <!-- New Quantum Simulation Detail Panel -->
+            <div class="panel-header" style="border-top: 1px solid #333; background: rgba(153,0,255,0.15);">
+                ⚛️ Quantum Simulation Status
+            </div>
+            <div id="quantumSimPanel" style="padding: 10px; background: #0a0515; font-size: 0.75em; max-height: 150px; overflow-y: auto;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <span style="color: #888;">GPU:</span>
+                        <span id="qsGpuName" style="color: #00ff00;">Detecting...</span>
+                    </div>
+                    <div>
+                        <span style="color: #888;">VRAM:</span>
+                        <span id="qsVramUsed" style="color: #00ccff;">-- MB</span>
+                    </div>
+                    <div>
+                        <span style="color: #888;">Qubits:</span>
+                        <span id="qsQubits" style="color: #9900ff;">--</span>
+                    </div>
+                    <div>
+                        <span style="color: #888;">Algorithm:</span>
+                        <span id="qsAlgorithm" style="color: #ffcc00;">Idle</span>
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <span style="color: #888;">Current Operation:</span>
+                        <span id="qsCurrentOp" style="color: #ff00ff; display: block; margin-top: 3px;">Waiting for quantum attack...</span>
+                    </div>
+                </div>
+                <div id="qsStepProgress" style="margin-top: 8px; padding: 5px; background: rgba(0,0,0,0.5); border-radius: 4px; display: none;">
+                    <div style="color: #888; margin-bottom: 3px;">Step Progress:</div>
+                    <div style="height: 6px; background: #333; border-radius: 3px; overflow: hidden;">
+                        <div id="qsProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #9900ff, #00ff00); transition: width 0.3s;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 2px; font-size: 10px;">
+                        <span id="qsStepNum">Step 0/0</span>
+                        <span id="qsStepPercent">0%</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -509,6 +548,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadGpuInfo();
             loadFromHarvest();
+            connectToQuantumService();  // Connect to Python quantum service
             
             // Initial fetch
             setTimeout(async () => {
@@ -526,13 +566,165 @@
                 autoStartDecryption();
             }, 2000);
             
-            // Fetch process logs every 1 second during decryption
+            // Fetch process logs every 500ms during decryption (faster for real-time feel)
             setInterval(async () => {
-                if (processingItem !== null) {
-                    await fetchProcessLogs();
-                }
-            }, 1000);
+                await fetchQuantumServiceLogs();
+            }, 500);
         });
+        
+        // Python Quantum Service URL (direct connection)
+        const QUANTUM_SERVICE_URL = 'http://localhost:8184';
+        
+        // Connect to the real Python quantum service
+        async function connectToQuantumService() {
+            try {
+                const response = await fetch(`${QUANTUM_SERVICE_URL}/api/quantum/status`);
+                if (response.ok) {
+                    const data = await response.json();
+                    log('✅ Connected to Python cuQuantum GPU Service (port 8184)', 'success');
+                    updateQuantumSimPanel(data);
+                    
+                    // Update GPU info from real service
+                    if (data.gpu_operational) {
+                        document.getElementById('qsGpuName').textContent = data.gpu_info?.name || 'GPU Active';
+                        document.getElementById('qsGpuName').style.color = '#00ff00';
+                    }
+                } else {
+                    log('⚠️ Quantum service returned error - using simulation', 'warn');
+                }
+            } catch (e) {
+                log('📡 Quantum service (port 8184) not reachable - using Java simulation', 'warn');
+            }
+        }
+        
+        // Fetch logs directly from Python quantum service
+        async function fetchQuantumServiceLogs() {
+            try {
+                // Try Python quantum service first
+                const response = await fetch(`${QUANTUM_SERVICE_URL}/api/quantum/logs?limit=50`);
+                if (response.ok) {
+                    const data = await response.json();
+                    displayQuantumServiceLogs(data);
+                    return;
+                }
+            } catch (e) {
+                // Fall back to Java service
+            }
+            
+            // Fallback to Java hacker console logs
+            await fetchProcessLogs();
+        }
+        
+        // Display logs from Python quantum service with rich formatting
+        function displayQuantumServiceLogs(data) {
+            const backendLogDiv = document.getElementById('backendLog');
+            
+            // Update GPU status panel
+            if (data.gpu_status) {
+                document.getElementById('qsGpuName').textContent = data.gpu_status.name || 'Unknown';
+                document.getElementById('qsVramUsed').textContent = `${data.gpu_status.memory_used_mb || 0} MB`;
+                document.getElementById('qsGpuName').style.color = data.gpu_status.operational ? '#00ff00' : '#ff0040';
+            }
+            
+            if (data.logs && data.logs.length > 0) {
+                // Track displayed logs to avoid duplicates
+                if (!window.displayedQuantumLogs) window.displayedQuantumLogs = new Set();
+                
+                const recentLogs = data.logs.slice(-30);
+                recentLogs.forEach(logEntry => {
+                    const logKey = `${logEntry.timestamp}-${logEntry.category}-${logEntry.message}`;
+                    
+                    if (!window.displayedQuantumLogs.has(logKey)) {
+                        window.displayedQuantumLogs.add(logKey);
+                        
+                        // Determine log style based on category
+                        let levelClass = 'info';
+                        let categoryColor = '#ff9900';
+                        
+                        if (logEntry.category?.includes('SHOR')) {
+                            levelClass = 'quantum';
+                            categoryColor = '#9900ff';
+                        } else if (logEntry.category?.includes('GROVER')) {
+                            levelClass = 'quantum';
+                            categoryColor = '#00ccff';
+                        } else if (logEntry.category?.includes('GPU')) {
+                            categoryColor = '#00ff00';
+                        } else if (logEntry.category?.includes('QFT')) {
+                            levelClass = 'quantum';
+                            categoryColor = '#ff00ff';
+                        } else if (logEntry.level === 'ERROR') {
+                            levelClass = 'error';
+                            categoryColor = '#ff0040';
+                        } else if (logEntry.level === 'WARNING') {
+                            levelClass = 'warn';
+                            categoryColor = '#ffcc00';
+                        }
+                        
+                        const timestamp = new Date(logEntry.timestamp).toLocaleTimeString();
+                        const entry = document.createElement('div');
+                        entry.className = `log-entry ${levelClass}`;
+                        entry.innerHTML = `<span style="color:#666;">[${timestamp}]</span> <span style="color:${categoryColor};">[${logEntry.category}]</span> ${logEntry.message}`;
+                        backendLogDiv.appendChild(entry);
+                        
+                        // Update quantum sim panel with latest step info
+                        updateQuantumStepFromLog(logEntry);
+                    }
+                });
+                
+                // Auto-scroll
+                backendLogDiv.scrollTop = backendLogDiv.scrollHeight;
+                
+                // Keep log div from getting too large
+                while (backendLogDiv.children.length > 100) {
+                    backendLogDiv.removeChild(backendLogDiv.firstChild);
+                }
+            }
+        }
+        
+        // Update quantum simulation panel based on log entry
+        function updateQuantumStepFromLog(logEntry) {
+            const details = logEntry.details || {};
+            
+            // Update current operation
+            if (logEntry.message) {
+                document.getElementById('qsCurrentOp').textContent = logEntry.message;
+            }
+            
+            // Update step progress if available
+            if (details.step !== undefined && details.total_steps !== undefined) {
+                document.getElementById('qsStepProgress').style.display = 'block';
+                document.getElementById('qsStepNum').textContent = `Step ${details.step}/${details.total_steps}`;
+                const percent = Math.round((details.step / details.total_steps) * 100);
+                document.getElementById('qsStepPercent').textContent = `${percent}%`;
+                document.getElementById('qsProgressBar').style.width = `${percent}%`;
+            }
+            
+            // Update GPU memory if available
+            if (details.gpu_memory_mb !== undefined) {
+                document.getElementById('qsVramUsed').textContent = `${Math.round(details.gpu_memory_mb)} MB`;
+            }
+            
+            // Update algorithm name based on category
+            if (logEntry.category?.includes('SHOR')) {
+                document.getElementById('qsAlgorithm').textContent = "Shor's Algorithm";
+                document.getElementById('qsAlgorithm').style.color = '#9900ff';
+            } else if (logEntry.category?.includes('GROVER')) {
+                document.getElementById('qsAlgorithm').textContent = "Grover's Search";
+                document.getElementById('qsAlgorithm').style.color = '#00ccff';
+            } else if (logEntry.category?.includes('PQC') || logEntry.category?.includes('LATTICE')) {
+                document.getElementById('qsAlgorithm').textContent = "Lattice Attack";
+                document.getElementById('qsAlgorithm').style.color = '#ff6600';
+            }
+        }
+        
+        // Update quantum sim panel from status response
+        function updateQuantumSimPanel(data) {
+            if (data.gpu_info) {
+                document.getElementById('qsGpuName').textContent = data.gpu_info.name || 'Unknown';
+                document.getElementById('qsVramUsed').textContent = `${data.gpu_info.total_memory_mb || 0} MB total`;
+            }
+            document.getElementById('qsGpuName').style.color = data.gpu_operational ? '#00ff00' : '#ff0040';
+        }
         
         // Auto-start decryption on new vulnerable items
         async function autoStartDecryption() {
@@ -944,22 +1136,33 @@
             const isRsa = item.encryption.includes('RSA');
             const isAes = item.encryption.includes('AES');
             
+            // Clear previous quantum logs for fresh display
+            window.displayedQuantumLogs = new Set();
+            document.getElementById('qsStepProgress').style.display = 'none';
+            document.getElementById('qsCurrentOp').textContent = 'Initializing quantum attack...';
+            
             // Select appropriate attack steps with more detail
             if (isRsa) {
                 item.steps = [...SHOR_STEPS];
                 log(`🔐 Target: ${item.encryption} encryption`, 'info');
                 log(`⚛️ Attack: Shor's Algorithm (Quantum Period Finding)`, 'quantum');
                 log(`📊 Qubits Required: ~${item.encryption.includes('4096') ? '8199' : '4099'} logical qubits`, 'info');
+                document.getElementById('qsAlgorithm').textContent = "Shor's Algorithm";
+                document.getElementById('qsQubits').textContent = item.encryption.includes('4096') ? '~8199' : '~4099';
             } else if (isAes) {
                 item.steps = [...GROVER_STEPS];
                 log(`🔐 Target: ${item.encryption} symmetric encryption`, 'info');
                 log(`⚛️ Attack: Grover's Algorithm (Quantum Search)`, 'quantum');
                 log(`📊 Speedup: Quadratic (√N iterations)`, 'info');
+                document.getElementById('qsAlgorithm').textContent = "Grover's Search";
+                document.getElementById('qsQubits').textContent = item.encryption.includes('256') ? '~256' : '~128';
             } else {
                 item.steps = [...LATTICE_STEPS];
                 log(`🔐 Target: ${item.encryption} (Post-Quantum Cryptography)`, 'info');
                 log(`⚛️ Attack: BKZ Lattice Reduction + Grover Enhancement`, 'quantum');
                 log(`🛡️ Expected Result: ATTACK WILL FAIL (PQC is quantum-resistant)`, 'warn');
+                document.getElementById('qsAlgorithm').textContent = "Lattice Attack";
+                document.getElementById('qsQubits').textContent = 'N/A (classical)';
             }
             
             const timeInfo = DECRYPT_TIMES[item.encryption] || DECRYPT_TIMES['RSA-2048'];
@@ -973,11 +1176,14 @@
             renderQueue();
             updateStats();
             
+            // Trigger REAL quantum simulation on Python service (non-blocking)
+            triggerRealQuantumSimulation(item, isRsa, isAes, isPqc);
+            
             // Simulate decryption progress with detailed logging
             for (let i = 0; i < item.steps.length; i++) {
-                // Fetch backend logs periodically
-                if (i % 3 === 0) {
-                    await fetchProcessLogs();
+                // Fetch backend logs more frequently during processing
+                if (i % 2 === 0) {
+                    await fetchQuantumServiceLogs();
                 }
                 
                 if (isPqc && i >= item.steps.length - 2) {
@@ -1002,7 +1208,7 @@
             }
             
             // Final log fetch
-            await fetchProcessLogs();
+            await fetchQuantumServiceLogs();
             
             // Complete
             item.endTime = Date.now();
@@ -1021,6 +1227,7 @@
                 log(`----------------------------------------`, 'info');
                 log(`🛡️ ATTACK FAILED after ${totalElapsed}s: ${item.encryption} is quantum-resistant!`, 'success');
                 log(`📊 PQC algorithms successfully defended against quantum attack`, 'success');
+                document.getElementById('qsCurrentOp').textContent = '🛡️ PQC DEFENSE SUCCESSFUL - Attack blocked!';
             } else {
                 item.status = 'completed';
                 item.result = {
@@ -1035,6 +1242,7 @@
                 log(`----------------------------------------`, 'info');
                 log(`💔 DECRYPTED in ${totalElapsed}s: ${item.type} - ${item.encryption} BROKEN!`, 'error');
                 log(`📊 Classical encryption vulnerable to quantum attack`, 'error');
+                document.getElementById('qsCurrentOp').textContent = '💔 RSA BROKEN - Private key recovered!';
             }
             
             results.unshift(item.result);
@@ -1047,6 +1255,57 @@
             // Also decrypt signature if RSA
             if (isRsa && !item.signature.includes('ML-DSA')) {
                 await decryptSignature(item);
+            }
+        }
+        
+        // Trigger real quantum simulation on Python service
+        async function triggerRealQuantumSimulation(item, isRsa, isAes, isPqc) {
+            try {
+                let endpoint = '';
+                let payload = {};
+                
+                if (isRsa) {
+                    endpoint = '/api/quantum/attack/rsa';
+                    payload = { 
+                        key_size: item.encryption.includes('4096') ? 4096 : 2048,
+                        document_id: item.documentId
+                    };
+                    log('📡 Sending RSA attack request to cuQuantum GPU service...', 'info');
+                } else if (isAes) {
+                    endpoint = '/api/quantum/grover';
+                    payload = { 
+                        key_bits: item.encryption.includes('256') ? 256 : 128,
+                        document_id: item.documentId
+                    };
+                    log('📡 Sending Grover search request to cuQuantum GPU service...', 'info');
+                } else if (isPqc) {
+                    endpoint = '/api/quantum/attack/lattice';
+                    payload = { 
+                        algorithm: item.encryption,
+                        security_level: 3,
+                        document_id: item.documentId
+                    };
+                    log('📡 Sending lattice attack request to cuQuantum GPU service...', 'info');
+                }
+                
+                if (endpoint) {
+                    // Non-blocking call to trigger the real simulation
+                    fetch(`${QUANTUM_SERVICE_URL}${endpoint}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    }).then(async response => {
+                        if (response.ok) {
+                            const result = await response.json();
+                            log(`📡 GPU Simulation complete: ${result.verdict || result.algorithm || 'Done'}`, 'success');
+                            console.log('Quantum service result:', result);
+                        }
+                    }).catch(e => {
+                        console.log('Quantum service call failed (using simulation):', e);
+                    });
+                }
+            } catch (e) {
+                console.log('Could not trigger real quantum simulation:', e);
             }
         }
         
