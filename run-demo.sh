@@ -3,14 +3,15 @@
 #  PQC CYBERSEC SIMULATOR - COMPREHENSIVE 4-PANEL DEMO
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Usage:
-#    ./run-demo.sh           - Auto-detect (Docker if available, else local)
-#    ./run-demo.sh --local   - Force local on-premise mode (no Docker)
-#    ./run-demo.sh --docker  - Force Docker mode
+#    ./run-demo.sh                    - Auto-detect mode, run automated tests
+#    ./run-demo.sh --local            - Force local mode (no Docker), run tests
+#    ./run-demo.sh --docker           - Force Docker mode, run tests
+#    ./run-demo.sh --local --manual   - Force local mode, skip tests (manual play)
+#    ./run-demo.sh --docker --manual  - Force Docker mode, skip tests (manual play)
+#    ./run-demo.sh --manual           - Auto-detect mode, skip tests (manual play)
 #
 #  Runs ALL 4 scenarios comparing Classical vs PQC cryptography
 # ═══════════════════════════════════════════════════════════════════════════════
-
-set -e
 
 # Colors for output
 RED='\033[0;31m'
@@ -18,6 +19,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 
 # Get script directory
@@ -26,46 +28,90 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Parse command line arguments
 FORCE_LOCAL=false
 FORCE_DOCKER=false
+MANUAL_MODE=false
 
-case "$1" in
-    --local|-l|--onprem)
-        FORCE_LOCAL=true
-        ;;
-    --docker|-d)
-        FORCE_DOCKER=true
-        ;;
-esac
+for arg in "$@"; do
+    case "$arg" in
+        --local|-l|--onprem)
+            FORCE_LOCAL=true
+            ;;
+        --docker|-d)
+            FORCE_DOCKER=true
+            ;;
+        --manual|-m|--play|--skip-tests)
+            MANUAL_MODE=true
+            ;;
+    esac
+done
+
+# Global variables to track PIDs
+GOV_PID=""
+HACKER_PID=""
+QS_PID=""
+USE_DOCKER=false
 
 # Cleanup function
 cleanup() {
     echo ""
-    echo -e "${YELLOW}Shutting down services...${NC}"
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}  SHUTTING DOWN ALL SERVICES...${NC}"
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════════════════════${NC}"
+    
+    echo -e "  ${CYAN}Stopping Java services...${NC}"
     pkill -f "spring-boot:run" 2>/dev/null || true
+    [ -n "$GOV_PID" ] && kill $GOV_PID 2>/dev/null || true
+    [ -n "$HACKER_PID" ] && kill $HACKER_PID 2>/dev/null || true
+    
+    echo -e "  ${CYAN}Stopping Quantum Simulator...${NC}"
     pkill -f "quantum_service.py" 2>/dev/null || true
+    [ -n "$QS_PID" ] && kill $QS_PID 2>/dev/null || true
+    
     if $USE_DOCKER; then
+        echo -e "  ${CYAN}Stopping Docker containers...${NC}"
         docker-compose down 2>/dev/null || true
     fi
-    echo -e "${GREEN}Cleanup complete${NC}"
+    
+    echo ""
+    echo -e "${GREEN}  All services stopped.${NC}"
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════════════════════${NC}"
     exit 0
 }
 
-trap cleanup SIGINT SIGTERM
+# Function to open browser (cross-platform)
+open_browser() {
+    local url="$1"
+    if command -v xdg-open &> /dev/null; then
+        xdg-open "$url" 2>/dev/null &
+    elif command -v open &> /dev/null; then
+        open "$url" 2>/dev/null &
+    elif command -v start &> /dev/null; then
+        start "$url" 2>/dev/null &
+    fi
+}
 
 echo ""
 echo "============================================================================================="
-echo "       PQC CYBERSEC - COMPREHENSIVE 4-PANEL DEMO"
-echo "       Demonstrating Quantum-Resistant vs Classical Cryptography"
+echo -e "       ${MAGENTA}PQC CYBERSEC - COMPREHENSIVE 4-PANEL DEMO${NC}"
+echo -e "       ${CYAN}Demonstrating Quantum-Resistant vs Classical Cryptography${NC}"
 echo "============================================================================================="
-echo "  ALL 4 SCENARIOS WILL RUN:"
+echo "  ALL 4 SCENARIOS AVAILABLE:"
 echo "    1. RSA KEM + RSA Sig     - FULLY VULNERABLE (Both broken by quantum)"
 echo "    2. ML-KEM + ML-DSA       - FULLY QUANTUM-SAFE (Both protected)"
 echo "    3. RSA KEM + ML-DSA      - MIXED (Encryption vulnerable, Signature safe)"
 echo "    4. ML-KEM + RSA Sig      - MIXED (Encryption safe, Signature vulnerable)"
 echo "============================================================================================="
-echo "  Usage: ./run-demo.sh [--local | --docker]"
-echo "    --local, -l, --onprem : Force local on-premise mode (SQLite database, no Docker)"
+echo "  Usage: ./run-demo.sh [OPTIONS]"
+echo "    --local, -l, --onprem : Force local on-premise mode (H2 database, no Docker)"
 echo "    --docker, -d          : Force Docker mode (PostgreSQL in container)"
-echo "    (no flag)             : Auto-detect infrastructure"
+echo "    --manual, -m, --play  : Skip automated tests, start services for manual testing"
+echo "    --skip-tests          : Same as --manual"
+echo "    (no flag)             : Auto-detect infrastructure, run automated tests"
+echo "============================================================================================="
+if $MANUAL_MODE; then
+    echo -e "  MODE: ${GREEN}MANUAL TESTING${NC} - Services will start, you can test manually!"
+else
+    echo -e "  MODE: ${BLUE}AUTOMATED TESTING${NC} - Selenium tests will run automatically"
+fi
 echo "============================================================================================="
 echo ""
 
@@ -104,8 +150,6 @@ else
 fi
 
 # Determine deployment mode
-USE_DOCKER=false
-
 if $FORCE_LOCAL; then
     echo -e "   ${CYAN}[INFO] Forced LOCAL mode via command line${NC}"
     USE_DOCKER=false
@@ -114,8 +158,8 @@ elif $FORCE_DOCKER; then
         echo -e "   ${CYAN}[INFO] Forced DOCKER mode via command line${NC}"
         USE_DOCKER=true
     else
-        echo -e "${RED}   [ERROR] Docker requested but not available!${NC}"
-        exit 1
+        echo -e "   ${YELLOW}[WARN] Docker requested but not available! Falling back to LOCAL mode.${NC}"
+        USE_DOCKER=false
     fi
 else
     # Auto-detect Docker availability
@@ -124,6 +168,7 @@ else
         USE_DOCKER=true
     else
         echo -e "   ${CYAN}[INFO] Docker not available - using local on-premise mode${NC}"
+        USE_DOCKER=false
     fi
 fi
 
@@ -134,10 +179,11 @@ if $USE_DOCKER; then
     echo "   Gov-Portal: Docker container"
 else
     echo -e "   ${CYAN}=== DEPLOYMENT MODE: LOCAL ON-PREMISE ===${NC}"
-    echo "   Database: SQLite (file-based, persistent)"
+    echo "   Database: H2 In-Memory (local, lightweight)"
     echo "   Gov-Portal: Local Maven process"
 fi
 echo "   Hacker Console: Local Maven process (always on-premise)"
+echo "   Quantum Simulator: Local Python process (GPU-accelerated if available)"
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -154,16 +200,50 @@ if $USE_DOCKER; then
     echo -e "   ${GREEN}[OK] PostgreSQL started (Docker)${NC}"
     DB_PROFILE="docker"
 else
-    echo -e "   ${GREEN}[OK] Using SQLite database (file-based, persistent)${NC}"
-    # Create data directory for SQLite
-    mkdir -p "$SCRIPT_DIR/gov-portal/data"
-    DB_PROFILE="sqlite"
+    echo -e "   ${GREEN}[OK] Using H2 in-memory database (local, fast startup)${NC}"
+    DB_PROFILE="h2"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Step 3: Deploy Gov-Portal Service
+# Step 3: Deploy Quantum Simulator FIRST (Python - needed by other services)
 # ═══════════════════════════════════════════════════════════════════════════════
-echo -e "${BLUE}[3/6] Deploying Gov-Portal Service...${NC}"
+echo -e "${BLUE}[3/6] Deploying Quantum Simulator...${NC}"
+
+# Kill existing processes on port 8184
+lsof -ti:8184 | xargs kill -9 2>/dev/null || true
+sleep 2
+
+QUANTUM_AVAILABLE=false
+
+if $PYTHON_AVAILABLE; then
+    echo "   Starting Quantum Simulator locally (Python with GPU support)..."
+    cd "$SCRIPT_DIR/quantum-simulator"
+    $PYTHON_CMD quantum_service.py > /tmp/quantum-simulator.log 2>&1 &
+    QS_PID=$!
+    cd "$SCRIPT_DIR"
+    
+    for i in {1..10}; do
+        if curl -s http://localhost:8184/health > /dev/null 2>&1; then
+            QUANTUM_AVAILABLE=true
+            break
+        fi
+        echo "   [INFO] Waiting for Quantum Simulator... [$i/10]"
+        sleep 3
+    done
+    
+    if $QUANTUM_AVAILABLE; then
+        echo -e "   ${GREEN}[OK] Quantum Simulator running on http://localhost:8184${NC}"
+    else
+        echo -e "   ${YELLOW}[WARN] Quantum Simulator not responding - continuing anyway${NC}"
+    fi
+else
+    echo -e "   ${YELLOW}[INFO] Python not available - Quantum simulator will run in simulation mode${NC}"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Step 4: Deploy Gov-Portal Service
+# ═══════════════════════════════════════════════════════════════════════════════
+echo -e "${BLUE}[4/6] Deploying Gov-Portal Service...${NC}"
 
 # Kill existing processes on port 8181
 lsof -ti:8181 | xargs kill -9 2>/dev/null || true
@@ -207,9 +287,9 @@ fi
 echo -e "   ${GREEN}[OK] Gov-Portal running on http://localhost:8181${NC}"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Step 4: Deploy Hacker Console UI (ALWAYS LOCAL - simulates external attacker)
+# Step 5: Deploy Hacker Console UI (ALWAYS LOCAL - simulates external attacker)
 # ═══════════════════════════════════════════════════════════════════════════════
-echo -e "${BLUE}[4/6] Deploying Hacker Console UI (Local On-Premise)...${NC}"
+echo -e "${BLUE}[5/6] Deploying Hacker Console UI (Local On-Premise)...${NC}"
 
 # Kill existing processes on port 8183
 lsof -ti:8183 | xargs kill -9 2>/dev/null || true
@@ -237,105 +317,190 @@ fi
 echo -e "   ${GREEN}[OK] Hacker Console UI running on http://localhost:8183 (Local)${NC}"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Step 5: Deploy Quantum Simulator
+# Step 6: Show Summary and Run Tests or Manual Mode
 # ═══════════════════════════════════════════════════════════════════════════════
-echo -e "${BLUE}[5/6] Deploying Quantum Simulator...${NC}"
-
-# Kill existing processes on port 8184
-lsof -ti:8184 | xargs kill -9 2>/dev/null || true
-sleep 2
-
-QUANTUM_AVAILABLE=false
-
-# Quantum Simulator always runs locally (Python)
-if $PYTHON_AVAILABLE; then
-    echo "   Starting Quantum Simulator locally (Python)..."
-    cd "$SCRIPT_DIR/quantum-simulator"
-    $PYTHON_CMD quantum_service.py > /tmp/quantum-simulator.log 2>&1 &
-    QS_PID=$!
-    cd "$SCRIPT_DIR"
-    
-    for i in {1..8}; do
-        if curl -s http://localhost:8184/api/quantum/status > /dev/null 2>&1; then
-            QUANTUM_AVAILABLE=true
-            break
-        fi
-        echo "   [INFO] Waiting for Quantum Simulator... [$i/8]"
-        sleep 3
-    done
-else
-    echo -e "   ${YELLOW}[SKIP] Quantum Simulator (Python not available)${NC}"
-fi
-
-if $QUANTUM_AVAILABLE; then
-    echo -e "   ${GREEN}[OK] Quantum Simulator running on http://localhost:8184${NC}"
-else
-    echo -e "   ${YELLOW}[INFO] Proceeding with simulation mode for quantum attacks${NC}"
-fi
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Step 6: Run Comprehensive 4-Panel Demo (ALL SCENARIOS)
-# ═══════════════════════════════════════════════════════════════════════════════
-echo -e "${BLUE}[6/6] Running Comprehensive 4-Panel Demo...${NC}"
+echo -e "${BLUE}[6/6] Setup Complete!${NC}"
 echo ""
 echo "============================================================================================="
-echo "  DEPLOYMENT SUMMARY:"
+echo -e "  ${CYAN}DEPLOYMENT SUMMARY:${NC}"
 if $USE_DOCKER; then
     echo "    Infrastructure: Docker Containers + Local Services"
     echo "    Database:       PostgreSQL (containerized)"
-    echo "    Gov-Portal:     Docker container"
+    echo "    Gov-Portal:     Docker container (http://localhost:8181)"
 else
-    echo "    Infrastructure: Fully Local On-Premise (No Docker)"
-    echo "    Database:       SQLite (file-based, persistent)"
-    echo "    Gov-Portal:     Local Maven process"
+    echo "    Infrastructure: Fully Local On-Premise (No Docker Required)"
+    echo "    Database:       H2 In-Memory (lightweight, fast)"
+    echo "    Gov-Portal:     Local Maven process (http://localhost:8181)"
 fi
-echo "    Hacker Console: Local Maven process (simulates external attacker)"
-echo "    Quantum Sim:    Local Python process"
+echo "    Hacker Console: Local Maven process (http://localhost:8183)"
+echo "    Quantum Sim:    Local Python process (http://localhost:8184)"
 echo ""
-echo "  SERVICES DEPLOYED:"
-echo "    Gov-Portal:        http://localhost:8181"
-echo "    Hacker Console UI: http://localhost:8183"
-echo "    Quantum Simulator: http://localhost:8184"
+echo -e "  ${GREEN}ALL SERVICES ARE NOW RUNNING:${NC}"
+echo "    [1] Gov-Portal:        http://localhost:8181"
+echo "        - Register as citizen, submit documents"
+echo "        - Login as officer to review applications"
 echo ""
-echo "  WATCH THE 4 BROWSER PANELS:"
-echo "    Top-Left:     Citizen submits documents with different algorithms"
-echo "    Top-Right:    Officer reviews applications"
-echo "    Bottom-Left:  Hacker intercepts encrypted traffic"
-echo "    Bottom-Right: Quantum decryption attack progress"
+echo "    [2] Hacker Console:    http://localhost:8183"
+echo "        - /harvest : Network traffic interception dashboard"
+echo "        - /decrypt : Quantum decryption attack dashboard"
 echo ""
-echo "  RUNNING ALL 4 SCENARIOS:"
-echo "    Scenario 1: RSA + RSA       - FULLY VULNERABLE"
-echo "    Scenario 2: ML-KEM + ML-DSA - FULLY QUANTUM-SAFE"
-echo "    Scenario 3: RSA + ML-DSA    - MIXED"
-echo "    Scenario 4: ML-KEM + RSA    - MIXED"
+echo "    [3] Quantum Simulator: http://localhost:8184"
+echo "        - GPU-accelerated quantum attack simulation"
+echo "        - Shor's Algorithm (RSA), Grover's (AES), Lattice (PQC)"
 echo "============================================================================================="
 echo ""
 
-cd "$SCRIPT_DIR/ui-tests"
-echo "Starting Selenium tests - Watch the 4 browser panels!"
-echo ""
-
-# Run comprehensive test with all scenarios
-mvn test -Dtest=com.pqc.selenium.ComprehensiveCryptoTest
-
-echo ""
-echo "============================================================================================="
-echo "  DEMO COMPLETE!"
-echo ""
-echo "  Services remain running for manual exploration:"
-echo "    Gov-Portal:        http://localhost:8181"
-echo "    Hacker Console UI: http://localhost:8183"
-echo "    Quantum Simulator: http://localhost:8184"
-echo ""
-echo "  To stop all services:"
-if $USE_DOCKER; then
-    echo "    docker-compose down"
-    echo "    pkill -f spring-boot:run"
+if $MANUAL_MODE; then
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # MANUAL TESTING MODE
+    # ═══════════════════════════════════════════════════════════════════════════════
+    echo -e "  ${GREEN}MANUAL TESTING MODE${NC}"
+    echo "============================================================================================="
+    echo ""
+    echo "  Opening browsers for manual testing..."
+    echo ""
+    
+    # Open browsers automatically
+    open_browser "http://localhost:8181"
+    sleep 2
+    open_browser "http://localhost:8183"
+    sleep 2
+    open_browser "http://localhost:8183/decrypt"
+    
+    echo "  Browsers opened:"
+    echo "    - Gov-Portal:     http://localhost:8181"
+    echo "    - Hacker Harvest: http://localhost:8183"
+    echo "    - Hacker Decrypt: http://localhost:8183/decrypt"
+    echo ""
+    echo "============================================================================================="
+    echo -e "  ${CYAN}HOW TO TEST MANUALLY:${NC}"
+    echo ""
+    echo "  [Step 1] GOV-PORTAL (http://localhost:8181)"
+    echo "    1. Click \"Register\" to create a new citizen account"
+    echo "    2. Login with your credentials"
+    echo "    3. Click \"Submit Application\" and choose encryption:"
+    echo "       - RSA-2048 + RSA-2048 (Vulnerable to quantum)"
+    echo "       - ML-KEM + ML-DSA (Quantum-safe PQC)"
+    echo "       - Mixed combinations to test hybrid scenarios"
+    echo "    4. Submit a passport/visa/license application"
+    echo ""
+    echo "  [Step 2] HACKER CONSOLE - HARVEST (http://localhost:8183)"
+    echo "    1. Watch the \"Intercepted Transactions\" panel"
+    echo "    2. Documents you submit will appear here (HNDL attack)"
+    echo "    3. Click \"Decrypt All\" or select individual items"
+    echo ""
+    echo "  [Step 3] HACKER CONSOLE - DECRYPT (http://localhost:8183/decrypt)"
+    echo "    1. See real-time quantum attack progress"
+    echo "    2. Watch Shor's Algorithm break RSA encryption"
+    echo "    3. Watch Grover's Algorithm attack AES"
+    echo "    4. See PQC (ML-KEM/ML-DSA) RESIST quantum attacks!"
+    echo ""
+    echo "  [Expected Results]"
+    echo "    - RSA/AES encrypted documents: DECRYPTED (Quantum vulnerable)"
+    echo "    - ML-KEM/ML-DSA documents: PROTECTED (Quantum-safe)"
+    echo "============================================================================================="
 else
-    echo "    Press Ctrl+C or run: pkill -f spring-boot:run"
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # AUTOMATED TEST MODE
+    # ═══════════════════════════════════════════════════════════════════════════════
+    echo -e "  ${BLUE}AUTOMATED TESTING MODE${NC}"
+    echo "  Running Selenium tests - Watch the 4 browser panels!"
+    echo ""
+    echo "  WATCH THE 4 BROWSER PANELS:"
+    echo "    Top-Left:     Citizen submits documents with different algorithms"
+    echo "    Top-Right:    Officer reviews applications"
+    echo "    Bottom-Left:  Hacker intercepts encrypted traffic"
+    echo "    Bottom-Right: Quantum decryption attack progress"
+    echo ""
+    echo "  RUNNING ALL 4 SCENARIOS:"
+    echo "    Scenario 1: RSA + RSA       - FULLY VULNERABLE"
+    echo "    Scenario 2: ML-KEM + ML-DSA - FULLY QUANTUM-SAFE"
+    echo "    Scenario 3: RSA + ML-DSA    - MIXED"
+    echo "    Scenario 4: ML-KEM + RSA    - MIXED"
+    echo "============================================================================================="
+    echo ""
+    
+    cd "$SCRIPT_DIR/ui-tests"
+    mvn test -Dtest=com.pqc.selenium.ComprehensiveCryptoTest
+    cd "$SCRIPT_DIR"
+    
+    echo ""
+    echo "============================================================================================="
+    echo -e "  ${GREEN}AUTOMATED TESTS COMPLETE!${NC}"
+    echo ""
+    echo "  All services remain running - you can now explore manually!"
+    echo "============================================================================================="
 fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KEEP RUNNING - Interactive Menu
+# ═══════════════════════════════════════════════════════════════════════════════
+echo ""
+echo "============================================================================================="
+echo -e "  ${GREEN}SERVICES ARE RUNNING - READY FOR TESTING${NC}"
+echo ""
+echo "  All services are running in background:"
+echo "    - Gov-Portal (Port 8181)"
+echo "    - Hacker Console (Port 8183)"
+echo "    - Quantum Simulator (Port 8184)"
+echo ""
+echo "  Logs available at:"
+echo "    - /tmp/gov-portal.log"
+echo "    - /tmp/hacker-console.log"
+echo "    - /tmp/quantum-simulator.log"
 echo "============================================================================================="
 echo ""
-echo "Press Enter to stop services and exit..."
-read -r
-cleanup
+
+while true; do
+    echo ""
+    echo -e "  ${CYAN}[O]${NC} Open browsers again"
+    echo -e "  ${CYAN}[T]${NC} Run automated tests now"
+    echo -e "  ${CYAN}[L]${NC} View logs"
+    echo -e "  ${RED}[Q]${NC} Quit and stop all services"
+    echo -e "  ${GREEN}[Enter]${NC} Keep services running (exit menu)"
+    echo ""
+    read -p "  Enter your choice: " USER_CHOICE
+    
+    case "$USER_CHOICE" in
+        [Oo])
+            echo "  Opening browsers..."
+            open_browser "http://localhost:8181"
+            open_browser "http://localhost:8183"
+            open_browser "http://localhost:8183/decrypt"
+            echo "  Browsers opened!"
+            ;;
+        [Tt])
+            echo "  Running automated tests..."
+            cd "$SCRIPT_DIR/ui-tests"
+            mvn test -Dtest=com.pqc.selenium.ComprehensiveCryptoTest
+            cd "$SCRIPT_DIR"
+            ;;
+        [Ll])
+            echo ""
+            echo "  Select log to view:"
+            echo "    [1] Gov-Portal"
+            echo "    [2] Hacker Console"
+            echo "    [3] Quantum Simulator"
+            read -p "  Choice: " LOG_CHOICE
+            case "$LOG_CHOICE" in
+                1) tail -50 /tmp/gov-portal.log 2>/dev/null || echo "Log not available" ;;
+                2) tail -50 /tmp/hacker-console.log 2>/dev/null || echo "Log not available" ;;
+                3) tail -50 /tmp/quantum-simulator.log 2>/dev/null || echo "Log not available" ;;
+            esac
+            ;;
+        [Qq])
+            cleanup
+            ;;
+        "")
+            echo ""
+            echo -e "  ${GREEN}Services continue running in background.${NC}"
+            echo "  You can close this terminal safely."
+            echo "  To stop services later, run: pkill -f spring-boot:run && pkill -f quantum_service.py"
+            echo ""
+            exit 0
+            ;;
+        *)
+            echo "  Invalid choice. Please try again."
+            ;;
+    esac
+done

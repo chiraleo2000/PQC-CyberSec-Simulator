@@ -321,6 +321,57 @@ public class HackerSimulationController {
         }
 
         /**
+         * Get GPU status including availability and memory usage.
+         * GET /api/hacker/gpu/status
+         */
+        @GetMapping("/gpu/status")
+        public ResponseEntity<?> getGpuStatus() {
+                log.info("🎮 GPU status requested");
+                return ResponseEntity.ok(Map.of(
+                        "gpuInfo", cuQuantumSimulator.getGpuInfo(),
+                        "gpuAvailable", cuQuantumSimulator.isGpuAvailable(),
+                        "gpuRequired", cuQuantumSimulator.isGpuRequired(),
+                        "gpuName", cuQuantumSimulator.getGpuName(),
+                        "gpuMemoryMB", cuQuantumSimulator.getGpuMemoryMB(),
+                        "gpuMemoryUsedMB", cuQuantumSimulator.getGpuMemoryUsedMB(),
+                        "computeCapability", cuQuantumSimulator.getComputeCapability(),
+                        "timeoutLimitHours", 1,
+                        "message", cuQuantumSimulator.isGpuAvailable() 
+                                ? "✅ GPU is available and ready for quantum simulation"
+                                : "⚠️ GPU NOT AVAILABLE - Running in degraded mode!"
+                ));
+        }
+
+        /**
+         * Get detailed process logs from quantum operations.
+         * GET /api/hacker/quantum/logs
+         */
+        @GetMapping("/quantum/logs")
+        public ResponseEntity<?> getQuantumLogs() {
+                log.info("📋 Quantum process logs requested");
+                return ResponseEntity.ok(Map.of(
+                        "logs", cuQuantumSimulator.getProcessLogs(),
+                        "totalEntries", cuQuantumSimulator.getProcessLogs().size(),
+                        "gpuStatus", Map.of(
+                                "available", cuQuantumSimulator.isGpuAvailable(),
+                                "name", cuQuantumSimulator.getGpuName(),
+                                "memoryUsedMB", cuQuantumSimulator.getGpuMemoryUsedMB()
+                        )
+                ));
+        }
+
+        /**
+         * Clear process logs.
+         * DELETE /api/hacker/quantum/logs
+         */
+        @DeleteMapping("/quantum/logs")
+        public ResponseEntity<?> clearQuantumLogs() {
+                log.info("🗑️ Clearing quantum process logs");
+                cuQuantumSimulator.getProcessLogs().clear();
+                return ResponseEntity.ok(Map.of("cleared", true, "message", "Process logs cleared"));
+        }
+
+        /**
          * HARVEST: Intercept real encrypted transaction logs from Government Portal.
          * POST /api/hacker/harvest/transactions
          * 

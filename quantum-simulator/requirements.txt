@@ -1,23 +1,38 @@
-# cuQuantum Python Service Dependencies
-# Requires NVIDIA CUDA Toolkit 12.x/13.x and cuQuantum SDK
+# =============================================================================
+# PQC-CyberSec-Simulator Quantum Service Dependencies
+# =============================================================================
+# 
+# This service uses NVIDIA GPU for quantum simulation via CuPy.
+# Requires: NVIDIA GPU with CUDA 12.x support (RTX 4060 recommended)
+#
+# For GPU acceleration (recommended):
+#   pip install -r requirements.txt
+#
+# For CPU-only fallback:
+#   pip install flask flask-cors numpy scipy sympy requests
+#
+# =============================================================================
 
-# Core quantum simulation - Use CUDA 11.x for better compatibility
-# cuquantum-python-cu12>=24.03.0
-# cupy-cuda12x>=13.0.0
-
-# Alternative: Use cupy with prebuilt wheels (more compatible)
+# GPU Acceleration (NVIDIA CUDA 12.x)
+# This provides GPU-accelerated array operations for quantum state simulation
 cupy-cuda12x>=13.3.0
 
-# Web service
+# Web service framework
 flask>=3.0.0
 flask-cors>=4.0.0
 
-# Math and utilities
+# Core mathematics
 numpy>=1.26.0
 scipy>=1.12.0
 
-# For Shor's algorithm implementation
+# Symbolic math for Shor's algorithm (period finding, continued fractions)
 sympy>=1.12
+
+# HTTP client for inter-service communication
+requests>=2.31.0
+
+# Optional: For profiling and monitoring
+# nvidia-ml-py>=12.535.133  # For GPU memory monitoring
 
 # HTTP client
 requests>=2.31.0

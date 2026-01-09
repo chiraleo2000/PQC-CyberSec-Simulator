@@ -1,29 +1,32 @@
 package com.pqc.hacker.quantum;
 
 import lombok.Data;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * cuQuantum GPU Simulator - NVIDIA GPU-Accelerated Quantum Attack Engine
+ * cuQuantum GPU Simulator v2.0 - NVIDIA GPU-Accelerated Quantum Attack Engine
  * 
- * This service uses the NVIDIA RTX 4060 GPU (8GB VRAM, Compute 8.9) to simulate
- * quantum computing attacks on RSA and other classical cryptography.
+ * *** GPU-ONLY MODE - CPU FALLBACK DISABLED ***
  * 
- * In a REAL quantum attack scenario, this would use:
- * - cuQuantum SDK for state vector simulation
- * - CUDA cores for parallel amplitude computation
- * - Tensor Cores for optimized matrix operations
+ * This service uses the NVIDIA GPU to simulate quantum computing attacks.
+ * GPU is REQUIRED for proper operation - will show warnings if not available.
  * 
- * For this educational demo, we simulate the GPU behavior showing:
- * - RSA-2048: VULNERABLE to Shor's algorithm (factored in simulated quantum time)
- * - ML-KEM-768: RESISTANT to all quantum attacks (lattice-based security)
+ * Features:
+ * - Shor's Algorithm for RSA factorization (RSA is VULNERABLE)
+ * - Grover's Algorithm for key search
+ * - PQC Attack Simulation (ML-KEM/ML-DSA are RESISTANT)
+ * - Detailed process logging for UI display
+ * - 1-hour timeout limit on all decryption operations
  * 
  * @author PQC CyberSec Simulator - Educational Demo
  */
@@ -31,31 +34,94 @@ import java.util.concurrent.*;
 @Slf4j
 public class CuQuantumGpuSimulator {
 
+    // Maximum decryption timeout (1 hour)
+    public static final Duration MAX_DECRYPTION_TIMEOUT = Duration.ofHours(1);
+    
     // GPU Properties (detected at startup)
+    @Getter
     private String gpuName = "Unknown GPU";
+    @Getter
     private long gpuMemoryMB = 0;
+    @Getter
     private int computeCapability = 0;
+    @Getter
     private boolean gpuAvailable = false;
+    @Getter
+    private boolean gpuRequired = true;  // GPU is REQUIRED
+    
+    // GPU Memory tracking
+    @Getter
+    private long gpuMemoryUsedMB = 0;
 
     // cuQuantum Simulation State
     private int numQubits = 0;
     private double[] stateVectorReal;
-    @SuppressWarnings("unused") // Reserved for complex amplitude simulation
+    @SuppressWarnings("unused")
     private double[] stateVectorImag;
     private final SecureRandom random = new SecureRandom();
 
     // Thread pool for parallel GPU simulation
-    @SuppressWarnings("unused") // Reserved for multi-threaded GPU operations
+    @SuppressWarnings("unused")
     private ExecutorService gpuThreadPool;
 
     // Attack Statistics
     private final Map<String, AttackStatistics> attackHistory = new ConcurrentHashMap<>();
+    
+    // Process logs for UI display
+    @Getter
+    private final List<ProcessLogEntry> processLogs = Collections.synchronizedList(new ArrayList<>());
 
     @PostConstruct
     public void initialize() {
+        log.info("🚀 Initializing cuQuantum GPU Simulator v2.0 - GPU-ONLY MODE");
+        logProcess("GPU_INIT", "Starting GPU initialization - GPU is REQUIRED", "INFO");
+        
         detectGpu();
         initializeThreadPool();
-        log.info("⚛️ cuQuantum GPU Simulator initialized - GPU: {} ({} MB VRAM)", gpuName, gpuMemoryMB);
+        
+        if (gpuAvailable) {
+            log.info("✅ cuQuantum GPU Simulator initialized - GPU: {} ({} MB VRAM)", gpuName, gpuMemoryMB);
+            logProcess("GPU_INIT", "GPU initialized successfully: " + gpuName, "INFO");
+        } else {
+            log.warn("⚠️ GPU NOT AVAILABLE - Running in DEGRADED MODE!");
+            log.warn("⚠️ Install NVIDIA drivers for full GPU acceleration.");
+            logProcess("GPU_INIT", "GPU NOT AVAILABLE - Running in degraded mode!", "ERROR");
+        }
+        
+        log.info("⏱️ Decryption timeout limit: {} hour(s)", MAX_DECRYPTION_TIMEOUT.toHours());
+    }
+    
+    /**
+     * Log a process step for UI display
+     */
+    public void logProcess(String category, String message, String level) {
+        ProcessLogEntry entry = new ProcessLogEntry();
+        entry.setTimestamp(Instant.now().toString());
+        entry.setCategory(category);
+        entry.setMessage(message);
+        entry.setLevel(level);
+        entry.setGpuMemoryMB(gpuMemoryUsedMB);
+        
+        processLogs.add(entry);
+        
+        // Keep only last 1000 entries
+        while (processLogs.size() > 1000) {
+            processLogs.remove(0);
+        }
+        
+        // Also log to standard logger
+        switch (level) {
+            case "ERROR" -> log.error("[{}] {}", category, message);
+            case "WARN" -> log.warn("[{}] {}", category, message);
+            default -> log.info("[{}] {}", category, message);
+        }
+    }
+    
+    /**
+     * Check if operation has exceeded timeout
+     */
+    public boolean hasTimedOut(Instant startTime) {
+        return Duration.between(startTime, Instant.now()).compareTo(MAX_DECRYPTION_TIMEOUT) > 0;
     }
 
     /**
@@ -213,7 +279,10 @@ public class CuQuantumGpuSimulator {
      * @return FactorizationResult with factors and timing
      */
     public FactorizationResult runShorsAlgorithm(BigInteger N, int keySize) {
+        Instant operationStart = Instant.now();
+        
         log.warn("⚛️ SHOR'S ALGORITHM: Attempting to factor {}-bit RSA modulus", keySize);
+        logProcess("SHOR_START", String.format("Starting Shor's Algorithm on %d-bit RSA modulus", keySize), "INFO");
         
         FactorizationResult result = new FactorizationResult();
         result.setModulus(N);
@@ -225,45 +294,97 @@ public class CuQuantumGpuSimulator {
         int requiredQubits = keySize * 2 + 3;
         result.setQubitsRequired(requiredQubits);
         
-        log.info("📐 Shor's algorithm requires {} qubits for {}-bit factorization", 
-                requiredQubits, keySize);
-
-        // For EDUCATIONAL DEMO: We simulate the factorization
-        // In reality, this would require a fault-tolerant quantum computer
+        log.info("📐 Shor's algorithm requires {} qubits for {}-bit factorization", requiredQubits, keySize);
+        logProcess("SHOR_QUBITS", String.format("Allocating %d qubits for factorization", requiredQubits), "INFO");
         
+        // Check GPU requirement
+        if (gpuRequired && !gpuAvailable) {
+            logProcess("SHOR_ERROR", "GPU is REQUIRED but not available - operation blocked!", "ERROR");
+            result.setSuccess(false);
+            result.setErrorMessage("GPU is REQUIRED for quantum simulation but no GPU detected!");
+            return result;
+        }
+
         try {
             // Initialize quantum registers
+            logProcess("SHOR_INIT", "Initializing quantum state vector", "INFO");
             initializeStateVector(Math.min(requiredQubits, calculateMaxQubits()));
+            gpuMemoryUsedMB = (1L << Math.min(numQubits, 20)) * 16 / (1024 * 1024);
+            logProcess("SHOR_MEMORY", String.format("GPU memory allocated: %d MB", gpuMemoryUsedMB), "INFO");
+            
+            // Check timeout
+            if (hasTimedOut(operationStart)) {
+                logProcess("SHOR_TIMEOUT", "Operation timed out (1 hour limit exceeded)", "ERROR");
+                result.setSuccess(false);
+                result.setErrorMessage("Operation timed out - exceeded 1 hour limit");
+                return result;
+            }
             
             // Phase 1: Superposition of all possible values
+            logProcess("SHOR_PHASE1", "Phase 1: Creating quantum superposition", "INFO");
             log.info("🌊 Phase 1: Creating superposition over {} values...", 1L << numQubits);
             applyHadamardAll();
-            simulateGpuComputation(100); // Simulate GPU processing
+            logProcess("SHOR_HADAMARD", String.format("Applied Hadamard gates to %d qubits", numQubits), "INFO");
+            simulateGpuComputation(100);
+            logProcess("SHOR_SUPERPOSITION", "Superposition created - all values exist simultaneously", "INFO");
+
+            // Check timeout
+            if (hasTimedOut(operationStart)) {
+                logProcess("SHOR_TIMEOUT", "Operation timed out during Phase 1", "ERROR");
+                result.setSuccess(false);
+                result.setErrorMessage("Operation timed out - exceeded 1 hour limit");
+                return result;
+            }
 
             // Phase 2: Period finding via modular exponentiation
+            logProcess("SHOR_PHASE2", "Phase 2: Modular exponentiation oracle", "INFO");
             log.info("🔄 Phase 2: Modular exponentiation oracle...");
-            BigInteger a = BigInteger.valueOf(2 + random.nextInt(N.intValue() - 2));
+            BigInteger a = BigInteger.valueOf(2 + random.nextInt(Math.max(1, N.intValue() - 2)));
+            logProcess("SHOR_BASE", String.format("Selected random base a = %s", a.toString()), "INFO");
             applyModularExponentiation(a, N, numQubits / 2);
             simulateGpuComputation(200);
+            logProcess("SHOR_MOD_EXP", "Modular exponentiation U|x⟩|y⟩ = |x⟩|y ⊕ a^x mod N⟩ complete", "INFO");
+
+            // Check timeout
+            if (hasTimedOut(operationStart)) {
+                logProcess("SHOR_TIMEOUT", "Operation timed out during Phase 2", "ERROR");
+                result.setSuccess(false);
+                result.setErrorMessage("Operation timed out - exceeded 1 hour limit");
+                return result;
+            }
 
             // Phase 3: Quantum Fourier Transform to extract period
+            logProcess("SHOR_PHASE3", "Phase 3: Quantum Fourier Transform", "INFO");
             log.info("📊 Phase 3: Quantum Fourier Transform...");
             applyQFT(0, numQubits / 2);
             simulateGpuComputation(150);
+            logProcess("SHOR_QFT", "QFT applied - extracting period information", "INFO");
+
+            // Check timeout
+            if (hasTimedOut(operationStart)) {
+                logProcess("SHOR_TIMEOUT", "Operation timed out during Phase 3", "ERROR");
+                result.setSuccess(false);
+                result.setErrorMessage("Operation timed out - exceeded 1 hour limit");
+                return result;
+            }
 
             // Phase 4: Measurement and classical post-processing
+            logProcess("SHOR_PHASE4", "Phase 4: Quantum measurement", "INFO");
             log.info("📏 Phase 4: Measurement and GCD computation...");
             long measurement = measureAll();
+            logProcess("SHOR_MEASURE", String.format("Quantum measurement result: %d", measurement), "INFO");
             log.debug("Quantum measurement result: {}", measurement);
             
+            // Classical post-processing
+            logProcess("SHOR_CLASSICAL", "Running continued fractions to find period r", "INFO");
+            logProcess("SHOR_GCD", "Computing GCD(a^(r/2) ± 1, N) for factors", "INFO");
+            
             // For demo: "Find" the factors using simulated quantum speedup
-            // We generate plausible-looking prime factors
             BigInteger p = generateDemoPrimeFactor(keySize / 2);
             BigInteger q = N.divide(p);
             
             // Verify factorization (for demo, we adjust q)
             if (!p.multiply(q).equals(N)) {
-                // For demo, create synthetic factorization
                 p = new BigInteger(keySize / 2, 100, random);
                 q = new BigInteger(keySize / 2, 100, random);
             }
@@ -280,18 +401,25 @@ public class CuQuantumGpuSimulator {
             double classicalYears = Math.pow(2, keySize / 3.0) / (1e9 * 365.25 * 24 * 3600);
             result.setClassicalTimeEstimate(String.format("%.2e years", classicalYears));
 
+            logProcess("SHOR_SUCCESS", String.format("FACTORIZATION SUCCESSFUL in %d ms!", elapsedMs), "INFO");
+            logProcess("SHOR_FACTOR_P", String.format("Factor p = %s...", p.toString().substring(0, Math.min(20, p.toString().length()))), "INFO");
+            logProcess("SHOR_FACTOR_Q", String.format("Factor q = %s...", q.toString().substring(0, Math.min(20, q.toString().length()))), "INFO");
+            logProcess("SHOR_COMPARE", String.format("Classical factorization would take: %s", result.getClassicalTimeEstimate()), "WARN");
+            
             log.warn("✅ SHOR'S ALGORITHM SUCCESSFUL!");
             log.warn("🔓 Factors found in {} ms (simulated quantum time)", elapsedMs);
             log.warn("⏱️ Classical factorization would take: {}", result.getClassicalTimeEstimate());
 
         } catch (Exception e) {
             log.error("Shor's algorithm error", e);
+            logProcess("SHOR_ERROR", "Error during factorization: " + e.getMessage(), "ERROR");
             result.setSuccess(false);
             result.setErrorMessage(e.getMessage());
         }
 
         // Record attack statistics
         recordAttackStatistics("RSA-" + keySize, result.isSuccess());
+        gpuMemoryUsedMB = 0;  // Release GPU memory
 
         return result;
     }
@@ -317,12 +445,23 @@ public class CuQuantumGpuSimulator {
      * - This provides quadratic speedup, but AES-256 remains secure
      */
     public GroverResult runGroversAlgorithm(int keyBits) {
+        Instant operationStart = Instant.now();
+        
         log.info("🔍 GROVER'S ALGORITHM: Searching {}-bit key space", keyBits);
+        logProcess("GROVER_START", String.format("Starting Grover's Algorithm for %d-bit key search", keyBits), "INFO");
 
         GroverResult result = new GroverResult();
         result.setKeyBits(keyBits);
         result.setStartTime(System.currentTimeMillis());
         result.setGpuUsed(gpuName);
+
+        // Check GPU requirement
+        if (gpuRequired && !gpuAvailable) {
+            logProcess("GROVER_ERROR", "GPU is REQUIRED but not available - operation blocked!", "ERROR");
+            result.setVulnerable(false);
+            result.setMessage("GPU is REQUIRED for quantum simulation but no GPU detected!");
+            return result;
+        }
 
         // Grover requires √N iterations
         long searchSpace = 1L << Math.min(keyBits, 30);
@@ -330,16 +469,39 @@ public class CuQuantumGpuSimulator {
         result.setIterationsRequired(iterations);
 
         log.info("📊 Search space: 2^{} = {} possibilities", keyBits, searchSpace);
+        logProcess("GROVER_SPACE", String.format("Search space: 2^%d possible keys", keyBits), "INFO");
         log.info("🔄 Grover iterations needed: {}", iterations);
+        logProcess("GROVER_ITERATIONS", String.format("Grover iterations required: π/4 × √(2^%d) = %d", keyBits, iterations), "INFO");
 
-        // Simulate Grover's algorithm
+        // Initialize quantum register
+        logProcess("GROVER_INIT", String.format("Initializing %d-qubit quantum register", Math.min(keyBits, calculateMaxQubits())), "INFO");
         initializeStateVector(Math.min(keyBits, calculateMaxQubits()));
+        
+        // Apply Hadamard to create uniform superposition
+        logProcess("GROVER_HADAMARD", "Applying Hadamard gates - creating uniform superposition", "INFO");
         applyHadamardAll();
 
-        for (int i = 0; i < Math.min(iterations, 100); i++) {
+        // Grover iterations
+        int iterationsToSimulate = Math.min(iterations, 20);
+        logProcess("GROVER_LOOP", String.format("Running %d Grover iterations (simulated)", iterationsToSimulate), "INFO");
+        
+        for (int i = 1; i <= iterationsToSimulate; i++) {
+            // Check timeout
+            if (hasTimedOut(operationStart)) {
+                logProcess("GROVER_TIMEOUT", "Operation timed out (1 hour limit exceeded)", "ERROR");
+                result.setVulnerable(false);
+                result.setMessage("Operation timed out - exceeded 1 hour limit");
+                return result;
+            }
+            
+            if (i % 5 == 0 || i == 1) {
+                logProcess("GROVER_ITER", String.format("Iteration %d/%d: Applying oracle and diffusion", i, iterationsToSimulate), "INFO");
+            }
             // Oracle and diffusion (simulated)
             simulateGpuComputation(10);
         }
+        
+        logProcess("GROVER_MEASURE", "Measuring quantum state for key candidate", "INFO");
 
         result.setEndTime(System.currentTimeMillis());
         result.setQuantumTimeMs(result.getEndTime() - result.getStartTime());
@@ -351,20 +513,24 @@ public class CuQuantumGpuSimulator {
             result.setMessage(String.format(
                     "⚠️ %d-bit key reduced to %d-bit security by Grover's algorithm",
                     keyBits, keyBits / 2));
+            logProcess("GROVER_RESULT", String.format("⚠️ VULNERABLE: %d-bit key → %d-bit effective security", keyBits, keyBits / 2), "WARN");
         } else {
             result.setEffectiveSecurity(keyBits / 2);
             result.setVulnerable(false);
             result.setMessage(String.format(
                     "✅ %d-bit key maintains %d-bit post-quantum security (sufficient)",
                     keyBits, keyBits / 2));
+            logProcess("GROVER_RESULT", String.format("✅ SECURE: %d-bit key maintains %d-bit post-quantum security", keyBits, keyBits / 2), "INFO");
         }
+        
+        logProcess("GROVER_COMPLETE", String.format("Grover's Algorithm completed in %d ms", result.getQuantumTimeMs()), "INFO");
 
         recordAttackStatistics("AES-" + keyBits, result.isVulnerable());
         return result;
     }
 
     // ==========================================================================
-    // LATTICE-BASED CRYPTO ATTACK (ML-KEM/Kyber)
+    // LATTICE-BASED CRYPTO ATTACK (ML-KEM/Kyber) - PQC ATTACK SIMULATION
     // ==========================================================================
 
     /**
@@ -374,24 +540,102 @@ public class CuQuantumGpuSimulator {
      * - ML-KEM security is based on the Learning With Errors (LWE) problem
      * - NO known quantum algorithm provides exponential speedup against LWE
      * - This demonstrates why PQC algorithms are quantum-resistant
+     * 
+     * Attack Methods Simulated:
+     * - BKZ Lattice Reduction (best known classical/quantum algorithm)
+     * - Grover-enhanced search (only quadratic speedup)
+     * - Dual attack variants
      */
     public LatticeAttackResult attackLatticeBasedCrypto(String algorithm, int securityLevel) {
+        Instant operationStart = Instant.now();
+        
         log.info("🛡️ ATTACKING LATTICE CRYPTO: {} (Level {})", algorithm, securityLevel);
-
+        logProcess("PQC_ATTACK_START", String.format("Initiating PQC attack on %s (Security Level %d)", algorithm, securityLevel), "WARN");
+        
         LatticeAttackResult result = new LatticeAttackResult();
         result.setAlgorithm(algorithm);
         result.setSecurityLevel(securityLevel);
         result.setStartTime(System.currentTimeMillis());
         result.setGpuUsed(gpuName);
 
+        // Check GPU requirement
+        if (gpuRequired && !gpuAvailable) {
+            logProcess("PQC_ERROR", "GPU is REQUIRED but not available - operation blocked!", "ERROR");
+            result.setBroken(false);
+            result.setMessage("GPU is REQUIRED for quantum simulation but no GPU detected!");
+            return result;
+        }
+
+        // Log algorithm parameters
+        int latticeDimension = switch (securityLevel) {
+            case 1 -> 512;   // ML-KEM-512
+            case 3 -> 768;   // ML-KEM-768
+            case 5 -> 1024;  // ML-KEM-1024
+            default -> 768;
+        };
+        
+        logProcess("PQC_PARAMS", String.format("Lattice dimension: %d, Module rank: %d", latticeDimension, latticeDimension / 256), "INFO");
+        
         // Best known quantum attack: BKZ algorithm with Grover speedup
-        // Provides only polynomial speedup, not exponential
         int latticeSecurityBits = switch (securityLevel) {
             case 1 -> 128;  // ML-KEM-512
             case 3 -> 192;  // ML-KEM-768
             case 5 -> 256;  // ML-KEM-1024
             default -> 192;
         };
+
+        // Phase 1: Lattice basis analysis
+        logProcess("PQC_PHASE1", "Phase 1: Analyzing lattice structure", "INFO");
+        simulateGpuComputation(100);
+        logProcess("PQC_LATTICE_ANALYSIS", String.format("Lattice dimension: %d, Finding short vectors...", latticeDimension), "INFO");
+        
+        // Check timeout
+        if (hasTimedOut(operationStart)) {
+            logProcess("PQC_TIMEOUT", "Operation timed out (1 hour limit exceeded)", "ERROR");
+            result.setBroken(false);
+            result.setMessage("Operation timed out - exceeded 1 hour limit");
+            return result;
+        }
+        
+        // Phase 2: BKZ lattice reduction attempt
+        logProcess("PQC_PHASE2", "Phase 2: BKZ-2.0 lattice reduction", "INFO");
+        int blockSize = Math.min(latticeDimension / 4, 100);
+        logProcess("PQC_BKZ", String.format("Running BKZ with block size β=%d", blockSize), "INFO");
+        simulateGpuComputation(200);
+        
+        // Simulate BKZ progress (will NOT succeed against proper PQC)
+        for (int tour = 1; tour <= 5; tour++) {
+            if (hasTimedOut(operationStart)) {
+                logProcess("PQC_TIMEOUT", "Operation timed out during BKZ reduction", "ERROR");
+                result.setBroken(false);
+                result.setMessage("Operation timed out - exceeded 1 hour limit");
+                return result;
+            }
+            logProcess("PQC_BKZ_TOUR", String.format("BKZ tour %d/∞: Shortest vector norm still too large", tour), "INFO");
+            simulateGpuComputation(50);
+        }
+        
+        logProcess("PQC_BKZ_FAIL", "BKZ reduction cannot find sufficiently short vectors", "WARN");
+        
+        // Phase 3: Grover-enhanced dual attack
+        logProcess("PQC_PHASE3", "Phase 3: Grover-enhanced search (quadratic speedup only)", "INFO");
+        simulateGpuComputation(100);
+        logProcess("PQC_GROVER", String.format("Grover search space: 2^%d (reduced from 2^%d)", latticeSecurityBits / 2, latticeSecurityBits), "INFO");
+        logProcess("PQC_GROVER_LIMIT", "Quadratic speedup insufficient against lattice-based security", "INFO");
+        
+        // Check timeout
+        if (hasTimedOut(operationStart)) {
+            logProcess("PQC_TIMEOUT", "Operation timed out during Grover search", "ERROR");
+            result.setBroken(false);
+            result.setMessage("Operation timed out - exceeded 1 hour limit");
+            return result;
+        }
+        
+        // Phase 4: Sieving attack attempt
+        logProcess("PQC_PHASE4", "Phase 4: Quantum sieving attack", "INFO");
+        double sievingComplexity = Math.pow(2, 0.292 * latticeDimension);
+        logProcess("PQC_SIEVE", String.format("Sieving complexity: 2^%.1f operations - INFEASIBLE", 0.292 * latticeDimension), "INFO");
+        simulateGpuComputation(100);
 
         // Even with quantum computer, lattice security remains strong
         int postQuantumSecurity = (int) (latticeSecurityBits * 0.95); // ~5% reduction at most
@@ -400,15 +644,17 @@ public class CuQuantumGpuSimulator {
         result.setQuantumSecurityBits(postQuantumSecurity);
         result.setBroken(false);
 
-        // Simulate attack attempt
-        simulateGpuComputation(500);
-
         result.setEndTime(System.currentTimeMillis());
+        result.setExecutionTimeMs(result.getEndTime() - result.getStartTime());
         result.setMessage(String.format(
                 "❌ ATTACK FAILED: %s maintains %d-bit security against quantum attacks. " +
                 "No known efficient quantum algorithm breaks lattice-based cryptography.",
                 algorithm, postQuantumSecurity));
 
+        logProcess("PQC_RESULT", String.format("ATTACK FAILED after %d ms", result.getExecutionTimeMs()), "ERROR");
+        logProcess("PQC_SECURE", String.format("%s maintains %d-bit post-quantum security", algorithm, postQuantumSecurity), "INFO");
+        logProcess("PQC_EXPLANATION", "LWE/MLWE problems have no known efficient quantum solutions", "INFO");
+        
         log.warn("🛡️ {} is QUANTUM RESISTANT - Attack unsuccessful", algorithm);
         recordAttackStatistics(algorithm, false);
 
@@ -576,5 +822,17 @@ public class CuQuantumGpuSimulator {
         
         // Run the lattice attack (will always fail - PQC is secure!)
         return attackLatticeBasedCrypto(algorithm, securityLevel);
+    }
+    
+    /**
+     * Process log entry for UI display
+     */
+    @Data
+    public static class ProcessLogEntry {
+        private String timestamp;
+        private String category;
+        private String message;
+        private String level;
+        private long gpuMemoryMB;
     }
 }
