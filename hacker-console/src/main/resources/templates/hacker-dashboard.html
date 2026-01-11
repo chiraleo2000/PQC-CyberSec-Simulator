@@ -719,9 +719,23 @@
             
             const encAlgo = getEncryptionAlgo(packet);
             const isVuln = isVulnerablePacket(packet);
+            const isPqc = encAlgo.includes('ML-KEM') || encAlgo.includes('ML-DSA');
             
-            log(`⚛️ Initiating Shor's Algorithm attack on packet #${idx + 1}...`, 'warning');
-            log(`Target: ${encAlgo} encryption`, 'info');
+            log(`══════════════════════════════════════════════`, 'warning');
+            log(`⚛️ QUANTUM ATTACK INITIATED`, 'warning');
+            log(`══════════════════════════════════════════════`, 'warning');
+            log(`📦 Target: Packet #${idx + 1} (${packet.targetId || packet.documentId || 'Unknown'})`, 'info');
+            log(`🔐 Algorithm: ${encAlgo}`, 'info');
+            log(`🎮 GPU: ${gpuInfo?.gpuName || 'Simulation Mode'}`, 'info');
+            
+            if (isPqc) {
+                log(`⚠️ WARNING: ${encAlgo} is Post-Quantum Cryptography!`, 'warning');
+                log(`🛡️ Expected result: Attack will FAIL (quantum-resistant)`, 'info');
+            } else {
+                log(`💀 ${encAlgo} is VULNERABLE to quantum attack!`, 'error');
+                log(`⚛️ Attack method: Shor's Algorithm (period finding)`, 'info');
+            }
+            log(`────────────────────────────────────────────────`, 'info');
             
             // Show progress bar in results panel
             showProgressBar(packet, encAlgo);
@@ -736,16 +750,27 @@
                 
                 const result = await response.json();
                 
-                // Simulate attack progress with percentage
-                await simulateAttackProgress();
+                // Use the new detailed attack simulation
+                await simulateDetailedAttack(encAlgo);
                 
                 // ALWAYS show results after attack completes
                 showAttackResult(packet, result, isVuln);
                 
+                // Log final result
+                log(`────────────────────────────────────────────────`, 'info');
+                if (isVuln && !isPqc) {
+                    log(`💔 ATTACK SUCCESSFUL: ${encAlgo} encryption BROKEN!`, 'success');
+                    log(`🔓 Private key recovered - all data decrypted`, 'success');
+                } else {
+                    log(`🛡️ ATTACK FAILED: ${encAlgo} is quantum-resistant!`, 'info');
+                    log(`✅ Data remains PROTECTED by PQC`, 'info');
+                }
+                log(`══════════════════════════════════════════════`, 'info');
+                
                 updateStats();
                 
             } catch (e) {
-                log(`Attack failed: ${e.message}`, 'error');
+                log(`❌ Attack failed: ${e.message}`, 'error');
                 hideProgressBar();
                 showAttackError(packet, e.message);
             }
@@ -756,12 +781,22 @@
             const safe = interceptedData.filter(p => !isVulnerablePacket(p));
             
             if (interceptedData.length === 0) {
-                log('No packets to attack - harvest data first!', 'warning');
+                log('⚠️ No packets to attack - harvest data first!', 'warning');
                 return;
             }
             
-            log(`🚀 Launching quantum attack on ALL ${interceptedData.length} packets...`, 'warning');
-            log(`   📊 ${vulnerable.length} vulnerable (RSA) + ${safe.length} protected (PQC)`, 'info');
+            log(`══════════════════════════════════════════════════`, 'warning');
+            log(`🚀 BULK QUANTUM ATTACK INITIATED`, 'warning');
+            log(`══════════════════════════════════════════════════`, 'warning');
+            log(`📊 Total targets: ${interceptedData.length} packets`, 'info');
+            log(`   • 💀 RSA Vulnerable: ${vulnerable.length} (will be BROKEN)`, 'error');
+            log(`   • 🛡️ PQC Protected: ${safe.length} (will remain SECURE)`, 'info');
+            log(`🎮 GPU: ${gpuInfo?.gpuName || 'Simulation Mode'}`, 'info');
+            log(`────────────────────────────────────────────────────`, 'info');
+            log(`⚛️ Shor's Algorithm: Quantum period finding for RSA factorization`, 'info');
+            log(`📐 Mathematical basis: a^r ≡ 1 (mod N) → factors via gcd`, 'info');
+            log(`⏱️ Classical time: ~10^15 years | Quantum time: seconds!`, 'info');
+            log(`────────────────────────────────────────────────────`, 'info');
             
             // Show bulk progress bar
             showBulkProgressBar(interceptedData.length);
@@ -772,16 +807,25 @@
                 });
                 const result = await response.json();
                 
-                // Simulate attack progress with percentage
-                await simulateAttackProgress();
+                // Use detailed attack simulation for RSA
+                await simulateDetailedAttack('RSA-2048');
                 
-                // ALWAYS show complete results
+                // Show complete results
                 showBulkAttackResults(result, vulnerable.length, safe.length);
+                
+                // Log final summary
+                log(`════════════════════════════════════════════════════`, 'info');
+                log(`⚛️ QUANTUM ATTACK COMPLETE - SUMMARY`, 'info');
+                log(`════════════════════════════════════════════════════`, 'info');
+                log(`💔 RSA keys factored: ${vulnerable.length} (private keys recovered!)`, 'success');
+                log(`🛡️ PQC protected: ${safe.length} (lattice problems remain hard)`, 'info');
+                log(`📊 Success rate on vulnerable targets: 100%`, 'success');
+                log(`⚠️ LESSON: Migrate to ML-KEM/ML-DSA for quantum safety!`, 'warning');
                 
                 updateStats();
                 
             } catch (e) {
-                log(`Bulk attack failed: ${e.message}`, 'error');
+                log(`❌ Bulk attack failed: ${e.message}`, 'error');
                 hideProgressBar();
                 showAttackError(null, e.message);
             }
@@ -804,6 +848,73 @@
                 updateProgressBar(step.pct);
                 log(`[SHOR ${step.pct}%] ${step.msg}`, step.pct === 100 ? 'success' : 'info');
                 await new Promise(r => setTimeout(r, 350));
+            }
+        }
+        
+        // Enhanced attack simulation with detailed technical steps
+        async function simulateDetailedAttack(encAlgo) {
+            const isRsa = encAlgo.includes('RSA');
+            const isPqc = encAlgo.includes('ML-KEM') || encAlgo.includes('ML-DSA');
+            
+            let steps = [];
+            if (isRsa) {
+                const bits = encAlgo.includes('4096') ? 4096 : 2048;
+                const qubits = 2 * bits + 3;
+                steps = [
+                    { pct: 3, msg: `[INIT] Allocating ${qubits} qubits for quantum register` },
+                    { pct: 8, msg: `[LOAD] Loading RSA-${bits} modulus N (${bits/10} decimal digits)` },
+                    { pct: 12, msg: `[MATH] Factoring goal: N = p × q where p,q are ${bits/2}-bit primes` },
+                    { pct: 18, msg: `[RANDOM] Selected random base a = 65537, verifying gcd(a,N)=1` },
+                    { pct: 25, msg: `[HADAMARD] Applying H⊗${qubits}: |0⟩ → (1/√2^${qubits})Σ|x⟩` },
+                    { pct: 32, msg: `[SUPERPOSITION] Created superposition of 2^${qubits} states on GPU` },
+                    { pct: 40, msg: `[ORACLE] Computing modular exponentiation: a^x mod N in parallel` },
+                    { pct: 48, msg: `[QUANTUM] Executing U_a: |x⟩|0⟩ → |x⟩|a^x mod N⟩ (${Math.pow(2, Math.min(qubits, 20)).toLocaleString()} states)` },
+                    { pct: 55, msg: `[QFT] Starting Quantum Fourier Transform (n²=${qubits*qubits} gates)` },
+                    { pct: 63, msg: `[QFT] Phase estimation: extracting period info into amplitudes` },
+                    { pct: 70, msg: `[INTERFERENCE] Quantum interference amplifying periodic states` },
+                    { pct: 78, msg: `[MEASURE] Measuring period register → collapsing to eigenvalue` },
+                    { pct: 83, msg: `[CLASSICAL] Continued fraction expansion: s/2^n → convergent p/q` },
+                    { pct: 88, msg: `[FACTOR] Period r found! Computing gcd(a^(r/2) ± 1, N)` },
+                    { pct: 93, msg: `[SUCCESS] Found factors p and q! Verifying p × q = N ✓` },
+                    { pct: 97, msg: `[KEYGEN] Computing private exponent: d = e^(-1) mod φ(N)` },
+                    { pct: 100, msg: `[DECRYPT] RSA-${bits} BROKEN! Plaintext: m = c^d mod N` }
+                ];
+            } else if (isPqc) {
+                steps = [
+                    { pct: 5, msg: `[INIT] Loading ${encAlgo} lattice parameters (n=256, q=3329)` },
+                    { pct: 12, msg: `[LATTICE] Constructing Module-LWE lattice structure` },
+                    { pct: 20, msg: `[BKZ] Initializing BKZ-β lattice reduction (β=20→400)` },
+                    { pct: 30, msg: `[GROVER] Attempting Grover-enhanced enumeration` },
+                    { pct: 40, msg: `[SVP] Searching for shortest vectors in lattice...` },
+                    { pct: 50, msg: `[COMPUTE] BKZ block reduction in progress...` },
+                    { pct: 60, msg: `[ANALYZE] Checking lattice gap factor γ = ||v||/λ₁(L)` },
+                    { pct: 70, msg: `[QUANTUM] Quantum speedup: O(√N) only - NOT exponential!` },
+                    { pct: 80, msg: `[FAIL] Attack complexity O(2^192) exceeds resources` },
+                    { pct: 90, msg: `[SECURE] Lattice problem remains NP-hard for quantum!` },
+                    { pct: 100, msg: `[PROTECTED] ${encAlgo} is QUANTUM RESISTANT - Attack FAILED!` }
+                ];
+            } else {
+                // AES (Grover's)
+                const bits = encAlgo.includes('256') ? 256 : 128;
+                steps = [
+                    { pct: 5, msg: `[INIT] Initializing ${bits}-qubit register for key search` },
+                    { pct: 15, msg: `[SUPERPOSITION] Creating |ψ⟩ = (1/√2^${bits})Σ|k⟩ over all keys` },
+                    { pct: 25, msg: `[ORACLE] Preparing AES verification oracle O_f` },
+                    { pct: 35, msg: `[GROVER] Starting Grover iterations (π/4 × √2^${bits})` },
+                    { pct: 50, msg: `[ITERATE] Amplitude amplification in progress...` },
+                    { pct: 65, msg: `[QUANTUM] Target probability increasing: sin²((2k+1)θ)` },
+                    { pct: 80, msg: `[MEASURE] Collapsing to candidate key state` },
+                    { pct: 90, msg: `[VERIFY] Testing candidate against known ciphertext` },
+                    { pct: 100, msg: `[COMPLETE] Grover search done (${bits}-bit → ${bits/2}-bit effective)` }
+                ];
+            }
+            
+            for (const step of steps) {
+                updateProgressBar(step.pct);
+                const logType = step.msg.includes('FAIL') || step.msg.includes('PROTECTED') ? 'success' : 
+                               step.msg.includes('BROKEN') || step.msg.includes('DECRYPT') ? 'error' : 'info';
+                log(`[${step.pct}%] ${step.msg}`, logType);
+                await new Promise(r => setTimeout(r, 250));
             }
         }
         
@@ -871,6 +982,7 @@
             const encAlgo = getEncryptionAlgo(packet);
             const packetId = packet.targetId || packet.documentId || packet.id || 'Unknown';
             const applicant = packet.originalSender || packet.applicant || 'Unknown';
+            const isPqc = encAlgo.includes('ML-KEM') || encAlgo.includes('ML-DSA');
             
             // Get attack details from the API response
             const attackData = result.attack || result;
@@ -882,9 +994,11 @@
             
             let html = '';
             
-            if (isVulnerable) {
+            if (isVulnerable && !isPqc) {
                 // RSA was broken!
-                log(`💔 RSA-2048 BROKEN! Private key factored!`, 'success');
+                const keyBits = encAlgo.includes('4096') ? 4096 : 2048;
+                const qubits = 2 * keyBits + 3;
+                log(`💔 RSA-${keyBits} BROKEN! Private key factored!`, 'success');
                 html = `
                     <div class="decrypted-data">
                         <h3>💔 DECRYPTED - RSA BROKEN!</h3>
@@ -902,15 +1016,30 @@
                         </div>
                         <div class="decrypted-field">
                             <span class="field-label">Attack Type:</span>
-                            <span class="field-value">Shor's Algorithm (Quantum Factoring)</span>
+                            <span class="field-value">Shor's Algorithm (Quantum Period Finding)</span>
                         </div>
                         <div class="decrypted-field">
                             <span class="field-label">Qubits Used:</span>
-                            <span class="field-value">~4,099 (simulated)</span>
+                            <span class="field-value">~${qubits.toLocaleString()} (2n+3 for n=${keyBits})</span>
+                        </div>
+                        <div class="decrypted-field">
+                            <span class="field-label">Key Formula:</span>
+                            <span class="field-value">d = e⁻¹ mod φ(N) where φ(N)=(p-1)(q-1)</span>
+                        </div>
+                        <div class="decrypted-field">
+                            <span class="field-label">Classical Time:</span>
+                            <span class="field-value">~10¹⁵ years (GNFS factoring)</span>
+                        </div>
+                        <div class="decrypted-field">
+                            <span class="field-label">Quantum Time:</span>
+                            <span class="field-value">~30 seconds (Shor's O(n³))</span>
                         </div>
                         <p style="color: #ff6666; margin-top: 10px; font-size: 0.9em; border-top: 1px solid #ff0040; padding-top: 10px;">
-                            ⚠️ ALL DATA IN THIS DOCUMENT IS NOW EXPOSED!<br>
-                            Private key recovered → Can decrypt all past & future messages!
+                            ⚠️ CRYPTOGRAPHIC CATASTROPHE!<br>
+                            ✗ Private key d recovered from public key (n,e)<br>
+                            ✗ All past encrypted messages can be decrypted: m = c^d mod N<br>
+                            ✗ Digital signatures can be forged: σ = m^d mod N<br>
+                            💀 RSA-${keyBits} provides ZERO security against quantum computers!
                         </p>
                     </div>
                 `;
@@ -922,11 +1051,19 @@
                 html = `
                     <div class="protected-data">
                         <h3>🛡️ PROTECTED - QUANTUM RESISTANT!</h3>
-                        <p style="color: #00cc00;">Algorithm: <strong>${encAlgo}</strong></p>
+                        <p style="color: #00cc00; font-size: 1.1em;">Algorithm: <strong>${encAlgo}</strong></p>
+                        <div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; margin: 10px 0;">
+                            <p style="color: #00ff00; margin: 5px 0;">✅ Security: NIST Level 3 (192-bit quantum)</p>
+                            <p style="color: #00ff00; margin: 5px 0;">✅ Problem: Module-LWE (lattice-based)</p>
+                            <p style="color: #00ff00; margin: 5px 0;">✅ Attack cost: O(2¹⁹²) operations</p>
+                            <p style="color: #00ff00; margin: 5px 0;">✅ Quantum speedup: None (polynomial only)</p>
+                        </div>
                         <p style="color: #888; font-size: 0.9em; margin-top: 10px;">
-                            Shor's Algorithm FAILED!<br>
-                            Lattice-based cryptography remains computationally infeasible.<br>
-                            Data remains CONFIDENTIAL.
+                            🛡️ <strong>Why Shor's Algorithm FAILS:</strong><br>
+                            Shor's algorithm exploits the structure of RSA (integer factoring).<br>
+                            Lattice-based crypto uses Module-LWE problem which has<br>
+                            NO known efficient quantum algorithm!<br><br>
+                            📊 <strong>Data remains CONFIDENTIAL and AUTHENTICATED.</strong>
                         </p>
                     </div>
                 `;

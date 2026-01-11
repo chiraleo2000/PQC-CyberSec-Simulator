@@ -498,50 +498,59 @@
         };
         
         const SHOR_STEPS = [
-            '🔧 Initializing quantum register with 4096+ qubits...',
-            '📦 Loading RSA modulus N (2048/4096-bit) into quantum memory...',
-            '🎲 Selecting random base a < N for period finding...',
-            '🌊 Applying Hadamard gates H⊗n to create superposition of all states...',
-            '⚙️ Preparing ancilla qubits for modular arithmetic...',
-            '🔮 Executing modular exponentiation oracle U_a: |x⟩|y⟩ → |x⟩|y⊕a^x mod N⟩...',
-            '⚡ Computing a^x mod N across 2^n superposed states simultaneously...',
-            '📊 Applying inverse QFT (Quantum Fourier Transform) to extract period...',
-            '📏 Measuring period register to collapse to eigenvalue...',
-            '🧮 Extracting period r using continued fractions algorithm...',
-            '🔢 Computing GCD(a^(r/2) - 1, N) with Euclidean algorithm...',
-            '🔢 Computing GCD(a^(r/2) + 1, N) to find factors...',
-            '✅ Verifying prime factors p × q = N...',
-            '🔓 Reconstructing private key d = e^(-1) mod φ(N)...',
-            '💀 Decrypting ciphertext: m = c^d mod N...',
+            '🔧 [INIT] Allocating 4099 qubits (2n+3 where n=2048 bits) for quantum register',
+            '📦 [LOAD] Loading RSA-2048 modulus N into quantum memory (N = p×q, 617 decimal digits)',
+            '🎲 [RANDOM] Selecting random base a ∈ [2, N-1] for quantum period finding, gcd(a,N)=1',
+            '🌊 [HADAMARD] Applying H⊗4096 gates: |0⟩⊗n → (1/√2ⁿ)∑|x⟩ creating superposition of 2⁴⁰⁹⁶ states',
+            '⚙️ [ANCILLA] Preparing ancilla qubits for modular arithmetic circuit (controlled operations)',
+            '🔮 [ORACLE] Executing modular exponentiation U_a: |x⟩|0⟩ → |x⟩|aˣ mod N⟩ via repeated squaring',
+            '⚡ [PARALLEL] Computing aˣ mod N across 2⁴⁰⁹⁶ superposed states SIMULTANEOUSLY (quantum parallelism)',
+            '📐 [QFT-INIT] Initializing Quantum Fourier Transform circuit with n² = 16M gate operations',
+            '📊 [QFT-EXEC] Applying QFT⁻¹: phase estimation extracts period info into amplitude interference',
+            '🌀 [INTERFERENCE] Quantum interference amplifying states where x·r ≡ 0 (mod 2ⁿ)',
+            '📏 [MEASURE] Measuring period register → collapsing to eigenvalue s/r with high probability',
+            '🧮 [CONTINUED-FRAC] Classical post-processing: continued fraction expansion of s/2ⁿ → convergent p/q',
+            '🔢 [GCD-1] Computing gcd(a^(r/2) - 1, N) using Euclidean algorithm → candidate factor p',
+            '🔢 [GCD-2] Computing gcd(a^(r/2) + 1, N) using Euclidean algorithm → candidate factor q',
+            '✅ [VERIFY] Verifying factorization: p × q = N, both p,q prime, |p-q| > 2^(n/2-100)',
+            '🔑 [KEYGEN] Computing φ(N) = (p-1)(q-1), then private exponent d = e⁻¹ mod φ(N)',
+            '💀 [DECRYPT] RSA BROKEN! Decrypting: plaintext m = cᵈ mod N (using Chinese Remainder Theorem)',
         ];
         
         const GROVER_STEPS = [
-            '🔧 Initializing quantum search register for key space...',
-            '🌊 Creating uniform superposition |ψ⟩ = 1/√N Σ|x⟩ over all keys...',
-            '🎯 Preparing oracle O_f that marks target key with phase flip...',
-            '🔄 Iteration 1: Applying oracle O_f (phase flip on target)...',
-            '📈 Iteration 1: Applying diffusion D = 2|ψ⟩⟨ψ| - I...',
-            '🔄 Iteration 2: Oracle application O_f...',
-            '📈 Iteration 2: Amplitude amplification (boosting target probability)...',
-            '⚡ Continuing Grover iterations (O(√N) total required)...',
-            '🎯 Approaching optimal iteration count π/4 × √N...',
-            '📏 Measuring quantum register to collapse superposition...',
-            '✅ Verifying candidate key against known ciphertext...',
-            '🔓 Key verification successful - correct key found!',
-            '💀 Decrypting with recovered symmetric key...',
+            '🔧 [INIT] Initializing n-qubit register for 2ⁿ key space (n=128 or n=256 for AES)',
+            '🌊 [SUPERPOSITION] Creating uniform superposition: |ψ⟩ = (1/√N)∑|x⟩ over all 2ⁿ possible keys',
+            '🎯 [ORACLE] Constructing oracle O_f that marks target: O_f|x⟩ = (-1)^f(x)|x⟩ where f(target)=1',
+            '🔄 [ITER-1-ORACLE] Iteration 1: Applying oracle O_f → phase flip on target key state',
+            '📈 [ITER-1-DIFFUSE] Iteration 1: Applying Grover diffusion D = 2|ψ⟩⟨ψ| - I → amplitude amplification',
+            '🔄 [ITER-2-ORACLE] Iteration 2: Oracle application O_f → target amplitude now ~3/√N',
+            '📈 [ITER-2-DIFFUSE] Iteration 2: Diffusion operator → target probability increasing quadratically',
+            '📊 [MATH] Current amplitude: sin((2k+1)θ) where θ = arcsin(1/√N), k = iteration number',
+            '⚡ [ITERATE] Continuing Grover iterations... optimal count = ⌊(π/4)√N⌋ ≈ √N iterations',
+            '🎯 [APPROACH] Approaching optimal iteration π/4 × √(2²⁵⁶) ≈ 2¹²⁸ iterations for AES-256',
+            '⏱️ [TIME] Quantum advantage: O(√N) vs O(N) classical → effective security: 128-bit → 64-bit',
+            '📏 [MEASURE] Measuring quantum register → collapse to candidate key with probability > 1/2',
+            '✅ [VERIFY] Verifying candidate: AES_decrypt(ciphertext, candidate_key) =? known_plaintext_pattern',
+            '🔓 [SUCCESS] Correct key found! AES key space search complete in √N operations',
+            '💀 [DECRYPT] Decrypting all data with recovered symmetric key...',
         ];
         
         const LATTICE_STEPS = [
-            '🔧 Initializing lattice reduction algorithm...',
-            '📦 Loading ML-KEM/ML-DSA public parameters (module lattice)...',
-            '🔨 Attempting BKZ (Block Korkine-Zolotarev) reduction...',
-            '📈 Increasing block size β for better approximation...',
-            '⚡ Quantum-enhanced LLL reduction with Grover oracle...',
-            '🔍 Searching for short vectors in lattice...',
-            '❓ Checking SVP (Shortest Vector Problem) solution...',
-            '💔 Attack complexity O(2^n) exceeds quantum resources...',
-            '⚠️ LATTICE PROBLEM REMAINS COMPUTATIONALLY HARD',
-            '🛡️ POST-QUANTUM CRYPTOGRAPHY PROTECTION VERIFIED',
+            '🔧 [INIT] Initializing lattice-based attack on ML-KEM/ML-DSA (CRYSTALS-Kyber/Dilithium)',
+            '📦 [LOAD] Loading public parameters: Module-LWE lattice dimension n=256, modulus q=3329',
+            '📊 [ANALYZE] Analyzing lattice structure: rank-256 module lattice over Rq = Zq[X]/(X²⁵⁶+1)',
+            '🔨 [BKZ-INIT] Initializing BKZ-β (Block Korkine-Zolotarev) lattice reduction algorithm',
+            '📈 [BKZ-BLOCK] Increasing block size β: current β=20 → target β=400+ for cryptographic lattices',
+            '⚡ [GROVER-LLL] Attempting Grover-enhanced LLL: quadratic speedup on sublattice enumeration',
+            '🔍 [SVP] Searching for short vectors: ||v|| < √(4/3)ⁿ·det(L)^(1/n) (Minkowski bound)',
+            '🧮 [ENUM] Running lattice enumeration: exponential cost O(2^(0.292n)) even with quantum',
+            '❓ [CHECK] Checking SVP solution quality: gap factor γ = ||v||/λ₁(L) still exponentially large',
+            '⚠️ [HARDNESS] Module-LWE Problem: no known polynomial quantum algorithm exists!',
+            '📊 [SECURITY] Post-quantum security level: NIST Level 3 (equivalent to AES-192)',
+            '💔 [FAIL] Attack complexity O(2^{143}) exceeds available quantum resources (need 10^40 qubits)',
+            '🛡️ [IMMUNE] CRYSTALS algorithms resist: Shor (not applicable), Grover (exponential still), BKZ (too slow)',
+            '⚠️ [VERDICT] LATTICE PROBLEM REMAINS COMPUTATIONALLY HARD - NO QUANTUM SPEEDUP!',
+            '🛡️ [RESULT] POST-QUANTUM CRYPTOGRAPHY PROTECTION VERIFIED - ATTACK BLOCKED!',
         ];
         
         // Initialize
@@ -1095,11 +1104,29 @@
                                 <span class="field-value">${(result.attackTime / 1000).toFixed(1)}s</span>
                             </div>
                             <div class="decrypted-field">
+                                <span class="field-label">Attack Type:</span>
+                                <span class="field-value">${result.encryption.includes('RSA') ? "Shor's Algorithm (Period Finding)" : "Grover's Algorithm (√N Search)"}</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Qubits Used:</span>
+                                <span class="field-value">${result.encryption.includes('RSA') ? '~4099 (2n+3)' : '~256'}</span>
+                            </div>
+                            <div class="decrypted-field">
                                 <span class="field-label">Signature:</span>
                                 <span class="field-value">${result.signatureForged ? 'FORGED ✗' : 'Verified'}</span>
                             </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Classical Time:</span>
+                                <span class="field-value">~10^15 years (exponential)</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Quantum Time:</span>
+                                <span class="field-value">${(result.attackTime / 1000).toFixed(1)}s (polynomial)</span>
+                            </div>
                             <p style="color: #ff6666; font-size: 0.8em; margin-top: 8px;">
-                                ⚠️ All personal data in this document is now EXPOSED!
+                                ⚠️ All personal data in this document is now EXPOSED!<br>
+                                💀 Private key recovered: d = e⁻¹ mod φ(N)<br>
+                                🔓 Plaintext: m = c^d mod N (decrypted successfully)
                             </p>
                         </div>
                     `;
@@ -1115,8 +1142,22 @@
                                 <span class="field-label">Status:</span>
                                 <span class="field-value" style="color: #00ff00;">QUANTUM-RESISTANT</span>
                             </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Attack:</span>
+                                <span class="field-value" style="color: #00ff00;">BKZ Lattice Reduction (FAILED)</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Security:</span>
+                                <span class="field-value" style="color: #00ff00;">NIST Level 3 (192-bit quantum)</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Problem:</span>
+                                <span class="field-value" style="color: #00ff00;">Module-LWE (No quantum speedup)</span>
+                            </div>
                             <p style="color: #00ff00; font-size: 0.8em; margin-top: 8px;">
-                                ✅ Post-Quantum Cryptography successfully defended against attack!
+                                ✅ Post-Quantum Cryptography successfully defended against attack!<br>
+                                🛡️ Lattice-based crypto remains computationally hard (O(2^192))<br>
+                                📊 Unlike RSA, quantum computers provide NO exponential speedup
                             </p>
                         </div>
                     `;
@@ -1144,25 +1185,74 @@
             // Select appropriate attack steps with more detail
             if (isRsa) {
                 item.steps = [...SHOR_STEPS];
-                log(`🔐 Target: ${item.encryption} encryption`, 'info');
-                log(`⚛️ Attack: Shor's Algorithm (Quantum Period Finding)`, 'quantum');
-                log(`📊 Qubits Required: ~${item.encryption.includes('4096') ? '8199' : '4099'} logical qubits`, 'info');
+                const keyBits = item.encryption.includes('4096') ? 4096 : 2048;
+                const qubits = 2 * keyBits + 3;
+                log(`══════════════════════════════════════════════════`, 'quantum');
+                log(`⚛️ SHOR'S ALGORITHM - RSA-${keyBits} QUANTUM ATTACK`, 'quantum');
+                log(`══════════════════════════════════════════════════`, 'quantum');
+                log(`🔐 Target: ${item.encryption} public-key encryption`, 'info');
+                log(`📊 RSA Security: Based on integer factorization problem`, 'info');
+                log(`📐 Mathematical Foundation:`, 'info');
+                log(`   • RSA: m^e mod N (encrypt), c^d mod N (decrypt)`, 'info');
+                log(`   • N = p × q (product of two large primes)`, 'info');
+                log(`   • φ(N) = (p-1)(q-1), d = e⁻¹ mod φ(N)`, 'info');
+                log(`⚛️ Quantum Attack Strategy:`, 'quantum');
+                log(`   • Shor's finds period r where a^r ≡ 1 (mod N)`, 'quantum');
+                log(`   • Period r → factors: gcd(a^(r/2) ± 1, N)`, 'quantum');
+                log(`   • Classical: O(exp(n^(1/3))) ≈ 10^15 years`, 'info');
+                log(`   • Quantum: O(n³) ≈ seconds to minutes!`, 'quantum');
+                log(`📊 Quantum Resources Required:`, 'info');
+                log(`   • Logical qubits: ${qubits} (2n+3 for n=${keyBits})`, 'info');
+                log(`   • State vector: 2^${Math.min(qubits, 28)} complex amplitudes`, 'info');
+                log(`   • GPU VRAM: ~${Math.round(Math.pow(2, Math.min(qubits, 20)) * 16 / 1024 / 1024)} MB`, 'info');
+                log(`----------------------------------------`, 'info');
                 document.getElementById('qsAlgorithm').textContent = "Shor's Algorithm";
-                document.getElementById('qsQubits').textContent = item.encryption.includes('4096') ? '~8199' : '~4099';
+                document.getElementById('qsQubits').textContent = `~${qubits}`;
             } else if (isAes) {
                 item.steps = [...GROVER_STEPS];
+                const keyBits = item.encryption.includes('256') ? 256 : 128;
+                log(`══════════════════════════════════════════════════`, 'quantum');
+                log(`⚛️ GROVER'S ALGORITHM - AES-${keyBits} QUANTUM SEARCH`, 'quantum');
+                log(`══════════════════════════════════════════════════`, 'quantum');
                 log(`🔐 Target: ${item.encryption} symmetric encryption`, 'info');
-                log(`⚛️ Attack: Grover's Algorithm (Quantum Search)`, 'quantum');
-                log(`📊 Speedup: Quadratic (√N iterations)`, 'info');
+                log(`📊 AES Security: Based on key search complexity`, 'info');
+                log(`📐 Mathematical Foundation:`, 'info');
+                log(`   • Key space: 2^${keyBits} possible keys`, 'info');
+                log(`   • Classical brute-force: O(2^${keyBits}) operations`, 'info');
+                log(`⚛️ Quantum Attack Strategy:`, 'quantum');
+                log(`   • Grover's: O(√N) = O(2^${keyBits/2}) iterations`, 'quantum');
+                log(`   • Quadratic speedup (NOT exponential like Shor)`, 'quantum');
+                log(`   • Effective security: ${keyBits}-bit → ${keyBits/2}-bit`, 'info');
+                log(`📊 Quantum Resources Required:`, 'info');
+                log(`   • Qubits: ${keyBits} (one per key bit)`, 'info');
+                log(`   • Iterations: π/4 × √(2^${keyBits}) ≈ 2^${keyBits/2 - 1}`, 'info');
+                log(`   • Still computationally expensive for AES-256!`, 'warn');
+                log(`----------------------------------------`, 'info');
                 document.getElementById('qsAlgorithm').textContent = "Grover's Search";
-                document.getElementById('qsQubits').textContent = item.encryption.includes('256') ? '~256' : '~128';
+                document.getElementById('qsQubits').textContent = `~${keyBits}`;
             } else {
                 item.steps = [...LATTICE_STEPS];
+                log(`══════════════════════════════════════════════════`, 'quantum');
+                log(`🛡️ LATTICE ATTACK - ${item.encryption} (PQC)`, 'quantum');
+                log(`══════════════════════════════════════════════════`, 'quantum');
                 log(`🔐 Target: ${item.encryption} (Post-Quantum Cryptography)`, 'info');
-                log(`⚛️ Attack: BKZ Lattice Reduction + Grover Enhancement`, 'quantum');
-                log(`🛡️ Expected Result: ATTACK WILL FAIL (PQC is quantum-resistant)`, 'warn');
+                log(`📊 Security: Based on lattice hard problems (LWE/MLWE)`, 'info');
+                log(`📐 Mathematical Foundation:`, 'info');
+                log(`   • Module-LWE: b = As + e over Rq = Zq[X]/(X^256+1)`, 'info');
+                log(`   • Lattice dimension: n=256, modulus q=3329`, 'info');
+                log(`   • Error distribution: centered binomial η=2`, 'info');
+                log(`⚛️ Quantum Attack Attempt:`, 'warn');
+                log(`   • BKZ-β lattice reduction (best known attack)`, 'warn');
+                log(`   • Grover-enhanced enumeration (only √ speedup)`, 'warn');
+                log(`   • NO exponential quantum speedup for lattices!`, 'error');
+                log(`📊 Why PQC is Quantum-Resistant:`, 'success');
+                log(`   • Classical security: 192+ bits (NIST Level 3)`, 'success');
+                log(`   • Quantum security: ~183 bits (still exponential)`, 'success');
+                log(`   • Attack cost: O(2^183) operations (infeasible)`, 'success');
+                log(`🛡️ EXPECTED RESULT: ATTACK WILL FAIL!`, 'success');
+                log(`----------------------------------------`, 'info');
                 document.getElementById('qsAlgorithm').textContent = "Lattice Attack";
-                document.getElementById('qsQubits').textContent = 'N/A (classical)';
+                document.getElementById('qsQubits').textContent = 'N/A (classical+quantum hybrid)';
             }
             
             const timeInfo = DECRYPT_TIMES[item.encryption] || DECRYPT_TIMES['RSA-2048'];

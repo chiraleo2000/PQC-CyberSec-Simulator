@@ -24,92 +24,53 @@ PQC-CyberSec-Simulator/
 
 ### Prerequisites
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| **Java JDK** | 21+ | Required for all Java services |
-| **Maven** | 3.9+ | Build tool |
-| **Docker Desktop** | Latest | For PostgreSQL & government services |
-| **Chrome Browser** | Latest | For Selenium UI tests |
-| **Python** | 3.10+ | For quantum simulator (optional) |
-| **NVIDIA GPU** | RTX 20 series+ | Optional - for GPU quantum simulation |
+| Requirement | Version | Required | Notes |
+|-------------|---------|----------|-------|
+| **Java JDK** | 21+ | ✅ Required | For all Java services |
+| **Maven** | 3.9+ | ✅ Required | Build tool |
+| **Chrome Browser** | Latest | ✅ Required | For Selenium UI tests |
+| **Python** | 3.10+ | ⚠️ Optional | For quantum simulator with GPU |
+| **Docker Desktop** | Latest | ⚠️ Optional | For containerized deployment |
+| **NVIDIA GPU** | RTX 20 series+ | ⚠️ Optional | For GPU quantum simulation |
+
+**Note:** The fully automated demo (`run-demo.bat`/`run-demo.sh`) runs everything **without Docker** for simplicity. Docker is only needed if you prefer containerized deployment.
 
 ---
 
 ## 📦 Installation & Setup
 
-### Step 1: Clone and Build
+### Quick Start (Fastest - No Docker Required!)
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+# 1. Clone the repository
+git clone https://github.com/yourusername/PQC-CyberSec-Simulator.git
 cd PQC-CyberSec-Simulator
 
-# Build all modules
-mvn clean compile -DskipTests
+# 2. Build all modules
+mvn clean install -DskipTests
 
-# Or build with tests
-mvn clean verify
+# 3. Run the fully automated demo!
+.\run-demo.bat          # Windows
+./run-demo.sh           # Linux/Mac
 ```
 
-### Step 2: Start Database (PostgreSQL)
+That's it! The demo will automatically:
+- ✅ Start all required services (Quantum Simulator, Gov-Portal, Hacker Console)
+- ✅ Open 4 browser panels in 2×2 grid
+- ✅ Execute all 4 cryptographic scenarios
+- ✅ Show real-time quantum attacks
+- ✅ Auto-cleanup after completion
 
-```bash
-# Start PostgreSQL container
-docker-compose up -d postgres
+**⏱️ Total time:** 6-8 minutes (fully automated, zero interaction)
 
-# Wait for database to be ready (about 10 seconds)
-docker-compose logs postgres
-```
+---
 
-### Step 3: Start Government Services (Docker)
+### Advanced Setup Options
 
-```bash
-# Start all government services
-docker-compose up -d
+#### Option 1: With GPU Quantum Simulation (Recommended)
 
-# Verify containers are running
-docker-compose ps
-```
+For **real GPU-accelerated quantum circuit simulation**:
 
-**Services Started:**
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| **Government Portal** | http://localhost:8181 | Web UI for citizens & officers |
-| **Secure Messaging** | http://localhost:8182 | Encrypted communications API |
-| **PostgreSQL** | localhost:5432 | Database |
-
-### Step 4: Start Hacker Console (Local)
-
-The hacker console runs **OUTSIDE** Docker to simulate a realistic external threat actor:
-
-**Option A: Using Batch File (Windows)**
-```bash
-# From project root
-start-hacker-standalone.bat
-```
-
-**Option B: Using Maven**
-```bash
-cd hacker-console
-mvn spring-boot:run -Dspring-boot.run.profiles=standalone
-```
-
-| Hacker Console | URL |
-|----------------|-----|
-| **Attack Dashboard** | http://localhost:8183 |
-
-### Step 5: Start Quantum Simulator (Optional)
-
-For REAL GPU-accelerated quantum circuit simulation:
-
-**Option A: Using Batch File (Windows)**
-```bash
-# From project root
-start-quantum.bat
-```
-
-**Option B: Manual Setup**
 ```bash
 cd quantum-simulator
 
@@ -123,14 +84,44 @@ pip install -r requirements.txt
 
 # For GPU support (requires CUDA 12)
 pip install cupy-cuda12x cuquantum-python-cu12
-
-# Start the service
-python quantum_service.py
 ```
 
-| Quantum Simulator | URL |
-|-------------------|-----|
-| **API Status** | http://localhost:8184/api/quantum/status |
+Then run the demo as usual - it will automatically detect and use your GPU!
+
+**GPU Status Check:**
+```bash
+cd quantum-simulator
+python -c "import cupy as cp; print(f'GPU: {cp.cuda.Device().name}')"
+```
+
+#### Option 2: With Docker (For PostgreSQL Production Setup)
+
+If you need persistent database storage:
+
+```bash
+# Start PostgreSQL container
+docker-compose up -d postgres
+
+# Wait for database to be ready
+docker-compose logs postgres
+
+# Build and start all services in Docker
+docker-compose up -d
+```
+
+**Services in Docker:**
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **Government Portal** | http://localhost:8181 | Web UI for citizens & officers |
+| **Secure Messaging** | http://localhost:8182 | Encrypted communications API |
+| **PostgreSQL** | localhost:5432 | Persistent database |
+
+---
+
+### Step-by-Step Manual Setup
+
+For development or troubleshooting:
 
 ---
 
@@ -147,19 +138,62 @@ python quantum_service.py
 
 ## 🎮 Running the Demo
 
-### Interactive Three-Panel UI Demo
+### 🚀 **FULLY AUTOMATED DEMO** (Recommended - Zero User Input!)
 
-The main demonstration shows **three Chrome browser windows simultaneously** demonstrating a realistic HNDL (Harvest Now, Decrypt Later) attack:
+The easiest way to run the complete demo is with our **fully automated script** that handles everything:
 
-| Panel | User | Description |
-|-------|------|-------------|
-| **LEFT** | 👤 Citizen | Regular citizen using government services |
-| **CENTER** | 👮 Officer | Government officer reviewing applications |
-| **RIGHT** | 🕵️ Hacker | Threat actor with quantum attack capability |
+**Windows:**
+```bash
+.\run-demo.bat
+```
 
-### Prerequisites for UI Test
+**Linux/Mac:**
+```bash
+./run-demo.sh
+```
 
-Before running the demo, ensure ALL services are running:
+**What happens automatically:**
+1. ✅ Cleans up any existing processes
+2. ✅ Starts Quantum Simulator (GPU-accelerated)
+3. ✅ Starts Government Portal (port 8181)
+4. ✅ Starts Hacker Console (port 8183)
+5. ✅ Opens 4 browser panels in 2x2 grid:
+   - **TOP-LEFT**: Citizen Portal
+   - **TOP-RIGHT**: Officer Portal
+   - **BOTTOM-LEFT**: Hacker Harvest Dashboard
+   - **BOTTOM-RIGHT**: Hacker Decrypt Panel
+6. ✅ Runs automated Selenium test demonstrating all 4 crypto scenarios
+7. ✅ Auto-cleanup after 2-minute inspection window
+
+**⏱️ Total Duration:** ~6-8 minutes (fully automated)  
+**🎯 User Action Required:** NONE - Just watch!
+
+---
+
+### 🎯 Four-Panel Visual Demo
+
+The automated demo shows **four Chrome browser panels simultaneously** in a 2×2 grid demonstrating realistic HNDL (Harvest Now, Decrypt Later) attacks with **4 different cryptographic scenarios**:
+
+| Panel | User/View | Description |
+|-------|-----------|-------------|
+| **TOP-LEFT** | 👤 Citizen | Regular citizen using government services |
+| **TOP-RIGHT** | 👮 Officer | Government officer reviewing applications |
+| **BOTTOM-LEFT** | 🕵️ Hacker Harvest | Threat actor intercepting encrypted traffic |
+| **BOTTOM-RIGHT** | ⚛️ Hacker Decrypt | Real-time quantum attack execution & results |
+
+**4 Crypto Scenarios Tested:**
+1. **RSA + RSA** → 🔴 FULLY VULNERABLE (both encryption & signature broken)
+2. **ML-KEM + ML-DSA** → 🟢 FULLY QUANTUM-SAFE (both protected)
+3. **RSA + ML-DSA** → 🟡 MIXED (encryption vulnerable, signature safe)
+4. **ML-KEM + RSA** → 🟡 MIXED (encryption safe, signature vulnerable)
+
+---
+
+### 📋 Manual Setup (Alternative)
+
+If you prefer manual control or need to troubleshoot, follow these steps:
+
+**Prerequisites:** Ensure ALL services are running:
 
 ```bash
 # 1. Start Docker services (gov-portal, secure-messaging, postgres)
@@ -179,78 +213,107 @@ mvn spring-boot:run -Dspring-boot.run.profiles=standalone
 # - Quantum Sim: http://localhost:8184
 ```
 
-### Run the Three-Panel Demo
+**Run the Four-Panel Selenium Demo:**
 
 ```bash
 cd ui-tests
-mvn test -Dtest=PqcSecurityDemoTest
+mvn test -Dtest=ComprehensiveCryptoTest
 ```
 
-**⏱️ Test Duration:** ~4-5 minutes  
-**📺 Display:** Three Chrome windows will appear - position them side-by-side for best experience!
+**⏱️ Test Duration:** ~5-6 minutes  
+**📺 Display:** Four Chrome windows will appear in 2x2 grid
 
 ### What the Demo Shows
 
-#### Phase 1: Authentication
-- **Citizen** logs in as `john.citizen`
-- **Officer** logs in with elevated privileges
-- **Hacker** detects active sessions via network monitoring
+The automated demo executes **4 complete cryptographic scenarios** showing all combinations of classical and quantum-safe algorithms:
 
-#### Phase 2: Data Submission (RSA - VULNERABLE)
-- **Citizen** submits Car License application with RSA-2048 encryption
-- **Hacker** intercepts ENCRYPTED packets (shows raw hex data):
-  ```
-  🔒 ENCRYPTED PAYLOAD:
-     3F8CD0C0D3BC1822 BDDC9DB950F71F4D 3AC2F3C19AC110...
-  ⚠️ VULNERABLE: Shor's Algorithm can break this!
-  ```
+#### **Scenario 1: ALL CLASSICAL (RSA + RSA)** 🔴 FULLY VULNERABLE
+- **Citizen** submits Car License with RSA-2048 encryption + RSA-2048 signature
+- **Hacker** intercepts ENCRYPTED packets
+- **Quantum Attack** breaks BOTH encryption AND signature
+- **Result:** Complete data breach - all information exposed
 
-#### Phase 3: Data Submission (ML-KEM - QUANTUM-SAFE)
-- **Citizen** submits Tax Filing with ML-KEM-768 encryption
-- **Hacker** intercepts but notes quantum-resistant cipher:
-  ```
-  🛡️ QUANTUM-SAFE: No known attack exists
-     → Stored but likely UNDECRYPTABLE
-  ```
+#### **Scenario 2: ALL PQC (ML-KEM + ML-DSA)** 🟢 FULLY QUANTUM-SAFE
+- **Citizen** submits Passport Application with ML-KEM-768 encryption + ML-DSA-65 signature
+- **Hacker** intercepts quantum-resistant packets
+- **Quantum Attack** FAILS on both encryption and signature
+- **Result:** Data remains fully protected - no breach possible
 
-#### Phase 4: Quantum Attack Execution
-- **Hacker** executes Shor's Algorithm on RSA packets
-- **RSA-2048 BROKEN** - Decrypted citizen data exposed:
-  ```
-  ╔═════════════════════════════════════════════════════════╗
-  ║     💔 DECRYPTED DATA - Car License Application         ║
-  ╠═════════════════════════════════════════════════════════╣
-  ║ 👤 Name: John Michael Citizen                           ║
-  ║ 📅 DOB: 1985-06-15                                      ║
-  ║ 🏠 Address: 1247 Oak Street, Springfield, IL 62701      ║
-  ╚═════════════════════════════════════════════════════════╝
-  ```
+#### **Scenario 3: MIXED (RSA + ML-DSA)** 🟡 ENCRYPTION VULNERABLE
+- **Citizen** submits Birth Certificate with RSA-2048 encryption + ML-DSA-65 signature
+- **Hacker** intercepts mixed-security packets
+- **Quantum Attack** breaks encryption but signature remains valid
+- **Result:** Partial breach - data exposed but authenticity verified
 
-#### Phase 5: ML-KEM Attack (FAILS)
-- **Hacker** attempts Lattice attack on ML-KEM packets
-- **ATTACK FAILED** - Tax Filing data remains protected:
-  ```
-  ╔═════════════════════════════════════════════════════════╗
-  ║     🔒 Tax Filing Data REMAINS ENCRYPTED                ║
-  ╠═════════════════════════════════════════════════════════╣
-  ║ [ENCRYPTED - CANNOT DECRYPT]                            ║
-  ║ Income, SSN, Bank Account remain PROTECTED              ║
-  ╚═════════════════════════════════════════════════════════╝
-  ```
+#### **Scenario 4: MIXED (ML-KEM + RSA)** 🟡 SIGNATURE VULNERABLE
+- **Citizen** submits Medical Records with ML-KEM-768 encryption + RSA-2048 signature
+- **Hacker** intercepts mixed-security packets
+- **Quantum Attack** breaks signature but encryption holds
+- **Result:** Partial breach - data protected but authenticity compromised
+
+---
+
+### Real-Time Visual Demonstration
+
+**BOTTOM-LEFT Panel (Hacker Harvest)** shows intercepted packets:
+```
+🔒 ENCRYPTED PAYLOAD CAPTURED:
+   Document: Car License
+   KEM: RSA-2048 ⚠️ VULNERABLE
+   Signature: RSA-2048 ⚠️ VULNERABLE
+   
+   Raw Hex: 3F8CD0C0D3BC1822 BDDC9DB950F71F4D...
+```
+
+**BOTTOM-RIGHT Panel (Hacker Decrypt)** shows quantum attack results:
+```
+╔═══════════════════════════════════════════════════════╗
+║  ⚛️ QUANTUM ATTACK RESULT - SCENARIO 1               ║
+╠═══════════════════════════════════════════════════════╣
+║  💔 RSA-2048 BROKEN BY SHOR'S ALGORITHM               ║
+║                                                       ║
+║  📋 DECRYPTED DATA:                                   ║
+║  👤 Name: John Michael Citizen                        ║
+║  📅 DOB: 1985-06-15                                   ║
+║  🏠 Address: 1247 Oak Street, Springfield, IL         ║
+║  🚗 License: DL-8472619                               ║
+╚═══════════════════════════════════════════════════════╝
+```
 
 ### Demo Summary Output
 
+After completing all 4 scenarios, the demo shows:
+
 ```
 ╔════════════════════════════════════════════════════════════════════════════════╗
-║                    PQC SECURITY DEMONSTRATION COMPLETE                         ║
+║              PQC COMPREHENSIVE CRYPTOGRAPHY TEST COMPLETE                      ║
 ╠════════════════════════════════════════════════════════════════════════════════╣
-║  📋 DOCUMENTS SUBMITTED:                                                       ║
-║     • Car License (RSA-2048)  → ⚠️ VULNERABLE - Data exposed by quantum       ║
-║     • Tax Filing (ML-KEM-768) → ✅ PROTECTED - Data remains secure            ║
 ║                                                                                ║
-║  ⚛️ QUANTUM ATTACK RESULTS:                                                    ║
-║     • Shor's Algorithm on RSA-2048: 💔 SUCCESS (key factored)                  ║
-║     • Lattice Attack on ML-KEM:     🛡️ FAILED (no efficient attack)           ║
+║  SCENARIO 1: RSA + RSA (Classical)                                            ║
+║     Encryption: 💔 BROKEN (RSA-2048 factored by Shor's Algorithm)             ║
+║     Signature:  💔 BROKEN (RSA-2048 signature forged)                         ║
+║     Result:     🔴 FULLY VULNERABLE - Complete data breach                    ║
+║                                                                                ║
+║  SCENARIO 2: ML-KEM + ML-DSA (Post-Quantum)                                   ║
+║     Encryption: 🛡️ PROTECTED (Lattice problem resistant)                      ║
+║     Signature:  🛡️ PROTECTED (No known quantum attack)                        ║
+║     Result:     🟢 FULLY QUANTUM-SAFE - Data fully protected                  ║
+║                                                                                ║
+║  SCENARIO 3: RSA + ML-DSA (Mixed - PQC Signature)                             ║
+║     Encryption: 💔 BROKEN (RSA-2048 factored)                                 ║
+║     Signature:  🛡️ PROTECTED (ML-DSA quantum-resistant)                       ║
+║     Result:     🟡 MIXED SECURITY - Encryption compromised                    ║
+║                                                                                ║
+║  SCENARIO 4: ML-KEM + RSA (Mixed - PQC Encryption)                            ║
+║     Encryption: 🛡️ PROTECTED (ML-KEM quantum-resistant)                       ║
+║     Signature:  💔 BROKEN (RSA-2048 signature forged)                         ║
+║     Result:     🟡 MIXED SECURITY - Signature compromised                     ║
+║                                                                                ║
+╠════════════════════════════════════════════════════════════════════════════════╣
+║  ✅ ALL TESTS PASSED                                                           ║
+║  ⚛️ Total Quantum Attacks: 8 (4 encryption + 4 signature)                     ║
+║  🔐 Quantum-Safe Algorithms: 100% protection rate                             ║
+║  💔 Classical Algorithms: 0% protection rate                                  ║
 ╚════════════════════════════════════════════════════════════════════════════════╝
 ```
 

@@ -1,7 +1,11 @@
 package com.pqc.document;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.pqc.document.dto.*;
+import com.pqc.document.dto.AuthResponse;
+import com.pqc.document.dto.DocumentRequest;
+import com.pqc.document.dto.DocumentResponse;
+import com.pqc.document.dto.LoginRequest;
+import com.pqc.document.dto.RegisterRequest;
 import com.pqc.document.entity.Document;
 import com.pqc.document.entity.User;
 import org.junit.jupiter.api.*;
