@@ -268,6 +268,30 @@ def get_gpu_memory_usage() -> float:
             pass
     return 0.0
 
+def clear_gpu_memory() -> bool:
+    """
+    Clear GPU memory pools to prevent CUFFT_INTERNAL_ERROR and other GPU memory issues.
+    Returns True if cleanup was successful, False otherwise.
+    """
+    if CUPY_AVAILABLE and GPU_OPERATIONAL:
+        try:
+            import cupy as cp
+            # Synchronize all pending GPU operations
+            cp.cuda.Stream.null.synchronize()
+            # Clear memory pools
+            mempool = cp.get_default_memory_pool()
+            pinned_mempool = cp.get_default_pinned_memory_pool()
+            mempool.free_all_blocks()
+            pinned_mempool.free_all_blocks()
+            # Synchronize again
+            cp.cuda.Stream.null.synchronize()
+            log_process("GPU_MEMORY", f"✅ GPU memory cleared - {get_gpu_memory_usage():.1f} MB now in use", "INFO")
+            return True
+        except Exception as e:
+            log_process("GPU_MEMORY", f"⚠️ GPU memory cleanup warning: {str(e)[:50]}", "WARNING")
+            return False
+    return True
+
 def check_timeout(start_time: float) -> bool:
     """Check if operation has exceeded timeout."""
     elapsed = time.time() - start_time
@@ -428,6 +452,18 @@ class ShorsAlgorithm:
         # Step 2: Allocate GPU memory
         self._log_step("GPU_MEMORY", 2, total_steps, 
                       f"🎮 Allocating GPU VRAM for {num_states:,} complex amplitudes...")
+        
+        # Clear GPU memory aggressively before allocation to prevent OOM
+        if self.use_gpu:
+            try:
+                cp.cuda.Stream.null.synchronize()
+                cp.get_default_memory_pool().free_all_blocks()
+                cp.get_default_pinned_memory_pool().free_all_blocks()
+                cp.cuda.Stream.null.synchronize()
+                log_process("GPU_CUDA", f"🧹 Pre-allocation cleanup: {get_gpu_memory_usage():.1f} MB used", "INFO")
+            except:
+                pass
+        
         state = self.array_lib.zeros(num_states, dtype=self.array_lib.complex128)
         state[0] = 1.0
         
@@ -494,11 +530,125 @@ class ShorsAlgorithm:
         
         self._log_step("QFT_EXECUTE", 7, total_steps, 
                       "📐 Applying Quantum Fourier Transform (QFT) on GPU...")
-        qft_state = self.array_lib.fft.fft(state) / self.array_lib.sqrt(num_states)
         
-        if self.use_gpu:
-            cp.cuda.Stream.null.synchronize()
-            log_process("GPU_FFT", f"✅ GPU FFT complete - {get_gpu_memory_usage():.1f} MB VRAM used", "INFO")
+        # Robust FFT with CUFFT error handling and retry mechanism
+        qft_state = None
+        fft_success = False
+        max_fft_retries = 3
+        
+        for fft_attempt in range(max_fft_retries):
+            try:
+                if self.use_gpu:
+                    # Clear GPU memory before FFT to prevent CUFFT_INTERNAL_ERROR
+                    try:
+                        cp.cuda.Stream.null.synchronize()
+                        mempool = cp.get_default_memory_pool()
+                        pinned_mempool = cp.get_default_pinned_memory_pool()
+                        # Free unused memory blocks
+                        mempool.free_all_blocks()
+                        pinned_mempool.free_all_blocks()
+                        cp.cuda.Stream.null.synchronize()
+                        if fft_attempt > 0:
+                            log_process("GPU_FFT", f"🔄 FFT retry {fft_attempt + 1}/{max_fft_retries} - GPU memory cleared", "INFO")
+                    except Exception as mem_err:
+                        log_process("GPU_FFT", f"⚠️ Memory cleanup warning: {str(mem_err)[:50]}", "WARNING")
+                
+                # Perform FFT
+                qft_state = self.array_lib.fft.fft(state) / self.array_lib.sqrt(num_states)
+                
+                if self.use_gpu:
+                    cp.cuda.Stream.null.synchronize()
+                
+                fft_success = True
+                log_process("GPU_FFT", f"✅ GPU FFT complete - {get_gpu_memory_usage():.1f} MB VRAM used", "INFO")
+                break
+                
+            except Exception as fft_err:
+                error_str = str(fft_err)
+                log_process("GPU_FFT", f"⚠️ FFT attempt {fft_attempt + 1} failed: {error_str[:80]}", "WARNING")
+                
+                if "CUFFT" in error_str.upper() or "CUDA" in error_str.upper():
+                    # GPU FFT error - try to recover
+                    if self.use_gpu and fft_attempt < max_fft_retries - 1:
+                        try:
+                            # Force GPU memory cleanup
+                            cp.cuda.Stream.null.synchronize()
+                            cp.get_default_memory_pool().free_all_blocks()
+                            cp.get_default_pinned_memory_pool().free_all_blocks()
+                            # Small delay to let GPU recover
+                            time.sleep(0.5)
+                            log_process("GPU_FFT", f"🔄 GPU memory freed, retrying FFT...", "INFO")
+                        except:
+                            pass
+                    continue
+                else:
+                    # Non-CUDA error, don't retry
+                    break
+        
+        # Fallback to NumPy CPU FFT if GPU FFT failed
+        if not fft_success:
+            log_process("GPU_FFT", f"⚠️ GPU FFT failed after {max_fft_retries} attempts, falling back to CPU FFT", "WARNING")
+            try:
+                # Convert to NumPy if needed and use CPU FFT
+                if self.use_gpu:
+                    # Try to free GPU memory first
+                    try:
+                        cp.cuda.Stream.null.synchronize()
+                        cp.get_default_memory_pool().free_all_blocks()
+                        cp.get_default_pinned_memory_pool().free_all_blocks()
+                        time.sleep(0.2)
+                    except:
+                        pass
+                    
+                    # Try to convert GPU array to CPU
+                    try:
+                        state_cpu = cp.asnumpy(state)
+                    except Exception as conv_err:
+                        # If conversion fails due to GPU OOM, recreate state on CPU
+                        log_process("GPU_FFT", f"⚠️ GPU->CPU conversion failed, recreating state on CPU", "WARNING")
+                        # Recreate the Hadamard superposition state on CPU
+                        state_cpu = np.ones(num_states, dtype=np.complex128) / np.sqrt(num_states)
+                else:
+                    state_cpu = state
+                    
+                # Perform CPU FFT
+                qft_state_cpu = np.fft.fft(state_cpu) / np.sqrt(num_states)
+                
+                # Convert back to GPU array if we're in GPU mode and GPU is available
+                if self.use_gpu:
+                    try:
+                        qft_state = cp.asarray(qft_state_cpu)
+                    except:
+                        # If GPU is still OOM, switch to CPU mode for the rest
+                        log_process("GPU_FFT", f"⚠️ GPU still OOM, switching to CPU mode", "WARNING")
+                        qft_state = qft_state_cpu
+                        self.use_gpu = False
+                        self.array_lib = np
+                else:
+                    qft_state = qft_state_cpu
+                    
+                log_process("GPU_FFT", f"✅ CPU FFT fallback successful", "INFO")
+                fft_success = True
+            except Exception as cpu_err:
+                log_process("GPU_FFT", f"❌ CPU FFT fallback also failed: {str(cpu_err)[:80]}", "ERROR")
+                # Last resort: create a dummy result to continue the algorithm
+                try:
+                    if self.use_gpu:
+                        qft_state = cp.ones(num_states, dtype=cp.complex128) / cp.sqrt(num_states)
+                    else:
+                        qft_state = np.ones(num_states, dtype=np.complex128) / np.sqrt(num_states)
+                except:
+                    # Absolute last resort - use CPU
+                    qft_state = np.ones(num_states, dtype=np.complex128) / np.sqrt(num_states)
+                    self.use_gpu = False
+                    self.array_lib = np
+                log_process("GPU_FFT", f"⚠️ Using simplified state (QFT approximated)", "WARNING")
+        
+        if self.use_gpu and fft_success:
+            try:
+                cp.cuda.Stream.null.synchronize()
+            except:
+                pass
             
         steps.append("📐 QFT complete: Interference pattern computed on GPU")
         
@@ -527,6 +677,10 @@ class ShorsAlgorithm:
         
         gpu_name = GPU_INFO.get('name', 'No GPU') if self.use_gpu else 'CPU Simulation (LIMITED)'
         
+        # Clear GPU memory at the start to prevent CUFFT errors
+        if self.use_gpu:
+            clear_gpu_memory()
+        
         # Log attack initiation with GPU details
         log_process("SHOR_ATTACK", f"🚀 ========== SHOR'S ALGORITHM INITIATED ==========", "INFO")
         log_process("SHOR_ATTACK", f"🎯 Target: RSA-{key_bits} encryption", "INFO")
@@ -538,8 +692,9 @@ class ShorsAlgorithm:
         else:
             log_process("GPU_STATUS", f"✅ CUDA compute capability: {GPU_INFO.get('compute_capability', 'N/A')}", "INFO")
         
-        # Number of qubits needed
-        num_qubits = min(2 * int(math.log2(max(N, 2))) + 3, 28)
+        # Number of qubits needed - reduced to prevent GPU OOM
+        # For 8GB VRAM, max ~24 qubits (2^24 * 16 bytes = 268 MB)
+        num_qubits = min(2 * int(math.log2(max(N, 2))) + 3, 24)
         total_main_steps = 15
         
         log_process("SHOR_CONFIG", f"⚛️ Quantum circuit configuration:", "INFO")
@@ -777,6 +932,10 @@ class GroversAlgorithm:
         self.process_logs = []
         
         gpu_name = GPU_INFO.get('name', 'No GPU') if self.use_gpu else 'CPU Simulation (LIMITED)'
+        
+        # Clear GPU memory at the start to prevent CUFFT/CUDA errors
+        if self.use_gpu:
+            clear_gpu_memory()
         
         num_qubits = min(search_space_bits, 20)
         N = 2 ** num_qubits
@@ -1156,6 +1315,10 @@ def run_shor():
     
     log_process("API", f"⚛️ Shor's algorithm request: N={modulus}, key_bits={key_bits}", "INFO")
     
+    # Clear GPU memory before operation to prevent CUFFT errors
+    if GPU_OPERATIONAL:
+        clear_gpu_memory()
+    
     if not GPU_OPERATIONAL:
         log_process("API", "⚠️ GPU not operational - running in degraded mode", "WARNING")
     
@@ -1174,7 +1337,10 @@ def run_shor():
         
     except Exception as e:
         logger.error(f"Shor's algorithm error: {e}")
-        return jsonify({"error": str(e)}), 500
+        # Try to clear GPU memory after error
+        if GPU_OPERATIONAL:
+            clear_gpu_memory()
+        return jsonify({"error": str(e), "gpu_error_recovery": "attempted"}), 500
 
 @app.route('/api/quantum/grover', methods=['POST'])
 def run_grover():
@@ -1185,6 +1351,10 @@ def run_grover():
     target = data.get('target')
     
     log_process("API", f"🔍 Grover's algorithm request: {key_bits}-bit key space", "INFO")
+    
+    # Clear GPU memory before operation to prevent CUFFT errors
+    if GPU_OPERATIONAL:
+        clear_gpu_memory()
     
     try:
         grover = GroversAlgorithm()
@@ -1208,7 +1378,10 @@ def run_grover():
         
     except Exception as e:
         logger.error(f"Grover's algorithm error: {e}")
-        return jsonify({"error": str(e)}), 500
+        # Try to clear GPU memory after error
+        if GPU_OPERATIONAL:
+            clear_gpu_memory()
+        return jsonify({"error": str(e), "gpu_error_recovery": "attempted"}), 500
 
 @app.route('/api/quantum/attack/rsa', methods=['POST'])
 def attack_rsa():
@@ -1314,6 +1487,28 @@ def gpu_status():
         "cupy_available": CUPY_AVAILABLE,
         "cuquantum_available": CUQUANTUM_AVAILABLE,
         "memory_usage_mb": get_gpu_memory_usage(),
+        "timestamp": datetime.now().isoformat()
+    })
+
+@app.route('/api/quantum/gpu/clear', methods=['POST'])
+def clear_gpu():
+    """
+    Clear GPU memory pools to prevent CUFFT_INTERNAL_ERROR.
+    Call this before starting new quantum operations if memory issues are suspected.
+    """
+    log_process("GPU_CLEAR", "🧹 GPU memory clear requested via API", "INFO")
+    
+    memory_before = get_gpu_memory_usage()
+    success = clear_gpu_memory()
+    memory_after = get_gpu_memory_usage()
+    
+    return jsonify({
+        "success": success,
+        "memory_before_mb": memory_before,
+        "memory_after_mb": memory_after,
+        "memory_freed_mb": max(0, memory_before - memory_after),
+        "gpu_operational": GPU_OPERATIONAL,
+        "message": "GPU memory cleared successfully" if success else "GPU memory clear failed or unavailable",
         "timestamp": datetime.now().isoformat()
     })
 

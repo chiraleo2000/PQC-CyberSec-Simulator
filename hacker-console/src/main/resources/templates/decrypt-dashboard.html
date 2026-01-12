@@ -324,14 +324,181 @@
         .log-entry.error { color: #ff0040; }
         .log-entry.success { color: #00ff00; }
         .log-entry.quantum { color: #9900ff; }
+        
+        /* Scenario Summary Modal */
+        .scenario-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .scenario-modal.active {
+            display: flex;
+        }
+        
+        .scenario-summary {
+            background: linear-gradient(135deg, #1a0a2e 0%, #0a1a2e 100%);
+            border: 2px solid #9900ff;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 900px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .scenario-summary h2 {
+            color: #9900ff;
+            text-align: center;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #9900ff;
+        }
+        
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        .scenario-card {
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #333;
+        }
+        
+        .scenario-card.vulnerable { border-color: #ff0040; }
+        .scenario-card.protected { border-color: #00ff00; }
+        .scenario-card.partial { border-color: #ffcc00; }
+        
+        .scenario-card h3 {
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+        
+        .scenario-card.vulnerable h3 { color: #ff0040; }
+        .scenario-card.protected h3 { color: #00ff00; }
+        .scenario-card.partial h3 { color: #ffcc00; }
+        
+        .scenario-detail {
+            font-size: 0.85em;
+            color: #aaa;
+            margin: 5px 0;
+        }
+        
+        .scenario-result {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        
+        .scenario-card.vulnerable .scenario-result { background: rgba(255, 0, 64, 0.2); }
+        .scenario-card.protected .scenario-result { background: rgba(0, 255, 0, 0.2); }
+        .scenario-card.partial .scenario-result { background: rgba(255, 204, 0, 0.2); }
+        
+        .close-modal {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 2em;
+            color: #fff;
+            cursor: pointer;
+        }
+        
+        .close-modal:hover { color: #ff0040; }
     </style>
 </head>
 <body>
+    <!-- Scenario Summary Modal -->
+    <div class="scenario-modal" id="scenarioModal">
+        <span class="close-modal" onclick="closeScenarioModal()">&times;</span>
+        <div class="scenario-summary">
+            <h2>⚛️ QUANTUM ATTACK RESULTS - 4 SCENARIOS</h2>
+            <div class="scenario-grid">
+                <div class="scenario-card vulnerable" id="scenario1Card">
+                    <h3>🔴 SCENARIO 1: RSA-KEM + RSA-Sig</h3>
+                    <div class="scenario-detail">🔐 Encryption: RSA-2048</div>
+                    <div class="scenario-detail">🖊️ Signature: RSA-2048</div>
+                    <div class="scenario-result" id="scenario1Result">
+                        <div>💀 <strong>FULLY VULNERABLE</strong></div>
+                        <div style="margin-top: 5px; font-size: 0.9em;">
+                            ✗ KEM BROKEN → Data DECRYPTED<br>
+                            ✗ Signature FORGED → Identity stolen
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="scenario-card protected" id="scenario2Card">
+                    <h3>🟢 SCENARIO 2: ML-KEM + ML-DSA</h3>
+                    <div class="scenario-detail">🔐 Encryption: ML-KEM-768 (Kyber)</div>
+                    <div class="scenario-detail">🖊️ Signature: ML-DSA-65 (Dilithium)</div>
+                    <div class="scenario-result" id="scenario2Result">
+                        <div>🛡️ <strong>FULLY PROTECTED</strong></div>
+                        <div style="margin-top: 5px; font-size: 0.9em;">
+                            ✓ KEM SAFE → Data confidential<br>
+                            ✓ Signature VALID → Identity protected
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="scenario-card partial" id="scenario3Card">
+                    <h3>🟡 SCENARIO 3: RSA-KEM + ML-DSA</h3>
+                    <div class="scenario-detail">🔐 Encryption: RSA-2048</div>
+                    <div class="scenario-detail">🖊️ Signature: ML-DSA-65 (Dilithium)</div>
+                    <div class="scenario-result" id="scenario3Result">
+                        <div>📖 <strong>PRIVACY LOST</strong></div>
+                        <div style="margin-top: 5px; font-size: 0.9em;">
+                            ✗ KEM BROKEN → Data DECRYPTED<br>
+                            ✓ Signature VALID → Cannot forge
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="scenario-card partial" id="scenario4Card">
+                    <h3>🟡 SCENARIO 4: ML-KEM + RSA-Sig</h3>
+                    <div class="scenario-detail">🔐 Encryption: ML-KEM-768 (Kyber)</div>
+                    <div class="scenario-detail">🖊️ Signature: RSA-2048</div>
+                    <div class="scenario-result" id="scenario4Result">
+                        <div>✍️ <strong>AUTHENTICITY LOST</strong></div>
+                        <div style="margin-top: 5px; font-size: 0.9em;">
+                            ✓ KEM SAFE → Data confidential<br>
+                            ✗ Signature FORGED → Identity theft
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; padding: 15px; background: rgba(153, 0, 255, 0.1); border-radius: 8px;">
+                <h3 style="color: #9900ff; margin-bottom: 10px;">🔑 KEY TAKEAWAY</h3>
+                <p style="color: #ccc; font-size: 0.9em;">
+                    <strong>Only SCENARIO 2 (ML-KEM + ML-DSA)</strong> provides complete protection against quantum attacks.<br>
+                    <strong>Partial PQC adoption</strong> still leaves vulnerabilities that quantum computers can exploit!<br>
+                    <strong>Migrate BOTH encryption AND signature</strong> to post-quantum algorithms NOW.
+                </p>
+            </div>
+            
+            <div style="text-align: center; margin-top: 15px;">
+                <button class="control-btn" onclick="closeScenarioModal()" style="padding: 10px 30px;">
+                    Close Summary
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="header">
         <h1>⚛️ QUANTUM DECRYPTION CONSOLE</h1>
         <div class="controls">
             <button class="control-btn" onclick="startDecryptAll()">🚀 Decrypt All Vulnerable</button>
             <button class="control-btn" onclick="loadFromHarvest()">📥 Load Harvested Data</button>
+            <button class="control-btn" onclick="showScenarioSummary()">📊 Show Summary</button>
             <button class="control-btn" onclick="clearLogs()">🗑️ Clear Logs</button>
         </div>
         <div class="gpu-status">
@@ -448,6 +615,36 @@
         let processingItem = null;
         let results = [];
         let gpuInfo = null;
+        let scenarioResults = {}; // Track results by scenario
+        
+        // Show scenario summary modal
+        function showScenarioSummary() {
+            document.getElementById('scenarioModal').classList.add('active');
+            updateScenarioCards();
+        }
+        
+        function closeScenarioModal() {
+            document.getElementById('scenarioModal').classList.remove('active');
+        }
+        
+        // Update scenario cards based on actual results
+        function updateScenarioCards() {
+            results.forEach(result => {
+                const enc = result.encryption;
+                const sig = result.signature || 'Unknown';
+                const isRsaEnc = enc && enc.includes('RSA');
+                const isRsaSig = sig && sig.includes('RSA');
+                
+                // Determine which scenario this is
+                let scenario = '';
+                if (isRsaEnc && isRsaSig) scenario = '1';
+                else if (!isRsaEnc && !isRsaSig) scenario = '2';
+                else if (isRsaEnc && !isRsaSig) scenario = '3';
+                else scenario = '4';
+                
+                scenarioResults[scenario] = result;
+            });
+        }
         
         /**
          * Convert algorithm enum name to display name.
@@ -563,21 +760,29 @@
             setTimeout(async () => {
                 await checkForNewData();
                 log('🔄 Initial data sync complete', 'info');
+                // Auto-start decryption immediately if data is available
+                autoStartDecryption();
             }, 500);
             
-            // Check for new data every 2 seconds and auto-start decryption
+            // Check for new data every 1 second (faster for demo) and auto-start decryption
             setInterval(async () => {
                 const prevCount = decryptionQueue.length;
                 await checkForNewData();
                 if (decryptionQueue.length > prevCount) {
                     log(`📥 ${decryptionQueue.length - prevCount} new item(s) detected`, 'success');
+                    // Immediately start decryption on new items
+                    autoStartDecryption();
                 }
-                autoStartDecryption();
-            }, 2000);
+            }, 1000);
             
             // Fetch process logs every 500ms during decryption (faster for real-time feel)
             setInterval(async () => {
                 await fetchQuantumServiceLogs();
+            }, 500);
+            
+            // Auto-start decryption check every 500ms
+            setInterval(() => {
+                autoStartDecryption();
             }, 500);
         });
         
@@ -735,17 +940,25 @@
             document.getElementById('qsGpuName').style.color = data.gpu_operational ? '#00ff00' : '#ff0040';
         }
         
-        // Auto-start decryption on new vulnerable items
+        // Auto-start decryption on new items (both vulnerable AND PQC to show full demo)
         async function autoStartDecryption() {
-            const vulnerable = decryptionQueue.filter(q => 
-                q.status === 'queued' && 
-                (q.encryption.includes('RSA') || q.encryption.includes('AES'))
-            );
+            // Get all queued items (not just vulnerable - we want to show PQC protection too)
+            const queued = decryptionQueue.filter(q => q.status === 'queued');
             
             // Only auto-start if not already processing
-            if (processingItem === null && vulnerable.length > 0) {
-                log(`⚛️ Auto-starting quantum attack on ${vulnerable[0].type} (${vulnerable[0].encryption})...`, 'quantum');
-                await startDecrypt(vulnerable[0].id);
+            if (processingItem === null && queued.length > 0) {
+                const item = queued[0];
+                const isPqc = item.encryption && (item.encryption.includes('ML-KEM') || item.encryption.includes('ML-DSA'));
+                const isRsa = item.encryption && item.encryption.includes('RSA');
+                
+                if (isRsa) {
+                    log(`⚛️ Auto-starting Shor's Algorithm attack on ${item.type} (${item.encryption})...`, 'quantum');
+                } else if (isPqc) {
+                    log(`🛡️ Auto-starting lattice attack on ${item.type} (${item.encryption})...`, 'quantum');
+                } else {
+                    log(`⚛️ Auto-starting quantum attack on ${item.type} (${item.encryption})...`, 'quantum');
+                }
+                await startDecrypt(item.id);
             }
         }
         
@@ -1076,93 +1289,138 @@
             if (results.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; color: #666; padding: 30px;">
-                        No decryption results yet.
+                        No decryption results yet.<br>
+                        <button class="control-btn" style="margin-top: 10px;" onclick="startDecryptAll()">
+                            🚀 Start Auto-Decrypt All
+                        </button>
                     </div>
                 `;
                 return;
             }
             
-            container.innerHTML = results.map(result => {
+            // Group by scenario for clear display
+            const scenarioMap = {};
+            results.forEach(result => {
+                const enc = result.encryption || 'Unknown';
+                const sig = result.signature || 'Unknown';
+                const isRsaEnc = enc.includes('RSA');
+                const isRsaSig = sig.includes('RSA');
+                
+                let scenarioNum = '';
+                let scenarioName = '';
+                if (isRsaEnc && isRsaSig) { scenarioNum = '1'; scenarioName = 'ALL CLASSICAL'; }
+                else if (!isRsaEnc && !isRsaSig) { scenarioNum = '2'; scenarioName = 'ALL PQC'; }
+                else if (isRsaEnc && !isRsaSig) { scenarioNum = '3'; scenarioName = 'RSA-KEM + ML-DSA'; }
+                else { scenarioNum = '4'; scenarioName = 'ML-KEM + RSA-Sig'; }
+                
+                if (!scenarioMap[scenarioNum]) {
+                    scenarioMap[scenarioNum] = { name: scenarioName, results: [] };
+                }
+                scenarioMap[scenarioNum].results.push(result);
+            });
+            
+            container.innerHTML = Object.entries(scenarioMap).sort((a, b) => a[0].localeCompare(b[0])).map(([num, scenario]) => {
+                const result = scenario.results[0];
                 if (result.success) {
+                    const kemBroken = result.encryption && result.encryption.includes('RSA');
+                    const sigBroken = result.signatureForged;
+                    let verdict = '';
+                    let verdictColor = '';
+                    let emoji = '';
+                    
+                    if (kemBroken && sigBroken) {
+                        verdict = '🔴 FULLY VULNERABLE';
+                        verdictColor = '#ff0040';
+                        emoji = '💀';
+                    } else if (kemBroken) {
+                        verdict = '🟡 PRIVACY LOST';
+                        verdictColor = '#ffcc00';
+                        emoji = '📖';
+                    } else {
+                        verdict = '🟡 AUTHENTICITY LOST';
+                        verdictColor = '#ffcc00';
+                        emoji = '✍️';
+                    }
+                    
                     return `
-                        <div class="decrypted-result">
-                            <h4>💔 DECRYPTED: ${result.type}</h4>
-                            <div class="decrypted-field">
-                                <span class="field-label">Doc ID:</span>
-                                <span class="field-value">${result.documentId}</span>
+                        <div class="decrypted-result" style="border-color: ${verdictColor};">
+                            <h4 style="color: ${verdictColor};">${emoji} SCENARIO ${num}: ${scenario.name}</h4>
+                            <div style="background: ${verdictColor}22; padding: 8px; border-radius: 4px; margin: 10px 0;">
+                                <strong style="color: ${verdictColor};">${verdict}</strong>
                             </div>
                             <div class="decrypted-field">
-                                <span class="field-label">Applicant:</span>
-                                <span class="field-value">${result.applicant}</span>
+                                <span class="field-label">Doc Type:</span>
+                                <span class="field-value">${result.type}</span>
                             </div>
                             <div class="decrypted-field">
-                                <span class="field-label">Algorithm:</span>
-                                <span class="field-value">${result.encryption} (BROKEN)</span>
+                                <span class="field-label">🔐 KEM:</span>
+                                <span class="field-value" style="color: ${kemBroken ? '#ff6666' : '#00ff00'};">
+                                    ${result.encryption} ${kemBroken ? '(BROKEN 💔)' : '(PROTECTED 🛡️)'}
+                                </span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">🖊️ Signature:</span>
+                                <span class="field-value" style="color: ${sigBroken ? '#ff6666' : '#00ff00'};">
+                                    ${result.signature || 'Unknown'} ${sigBroken ? '(FORGED ✍️)' : '(VALID ✅)'}
+                                </span>
                             </div>
                             <div class="decrypted-field">
                                 <span class="field-label">Attack Time:</span>
                                 <span class="field-value">${(result.attackTime / 1000).toFixed(1)}s</span>
                             </div>
-                            <div class="decrypted-field">
-                                <span class="field-label">Attack Type:</span>
-                                <span class="field-value">${result.encryption.includes('RSA') ? "Shor's Algorithm (Period Finding)" : "Grover's Algorithm (√N Search)"}</span>
-                            </div>
-                            <div class="decrypted-field">
-                                <span class="field-label">Qubits Used:</span>
-                                <span class="field-value">${result.encryption.includes('RSA') ? '~4099 (2n+3)' : '~256'}</span>
-                            </div>
-                            <div class="decrypted-field">
-                                <span class="field-label">Signature:</span>
-                                <span class="field-value">${result.signatureForged ? 'FORGED ✗' : 'Verified'}</span>
-                            </div>
-                            <div class="decrypted-field">
-                                <span class="field-label">Classical Time:</span>
-                                <span class="field-value">~10^15 years (exponential)</span>
-                            </div>
-                            <div class="decrypted-field">
-                                <span class="field-label">Quantum Time:</span>
-                                <span class="field-value">${(result.attackTime / 1000).toFixed(1)}s (polynomial)</span>
-                            </div>
-                            <p style="color: #ff6666; font-size: 0.8em; margin-top: 8px;">
-                                ⚠️ All personal data in this document is now EXPOSED!<br>
-                                💀 Private key recovered: d = e⁻¹ mod φ(N)<br>
-                                🔓 Plaintext: m = c^d mod N (decrypted successfully)
-                            </p>
+                            ${kemBroken ? `
+                                <p style="color: #ff6666; font-size: 0.8em; margin-top: 8px; padding: 8px; background: rgba(255,0,64,0.1); border-radius: 4px;">
+                                    ⚠️ RSA-KEM broken by Shor's Algorithm!<br>
+                                    🔓 AES-256 session key EXPOSED via decapsulation<br>
+                                    📄 All document data has been DECRYPTED
+                                </p>
+                            ` : ''}
+                            ${sigBroken ? `
+                                <p style="color: #ff6666; font-size: 0.8em; margin-top: 8px; padding: 8px; background: rgba(255,0,64,0.1); border-radius: 4px;">
+                                    ⚠️ RSA Signature key recovered!<br>
+                                    ✍️ Can FORGE any document with valid signature<br>
+                                    👤 Identity theft and impersonation possible
+                                </p>
+                            ` : ''}
                         </div>
                     `;
                 } else {
                     return `
                         <div class="failed-result">
-                            <h4>🛡️ PROTECTED: ${result.type}</h4>
-                            <div class="decrypted-field">
-                                <span class="field-label">Algorithm:</span>
-                                <span class="field-value" style="color: #00ff00;">${result.encryption}</span>
+                            <h4 style="color: #00ff00;">🛡️ SCENARIO ${num}: ${scenario.name}</h4>
+                            <div style="background: rgba(0,255,0,0.1); padding: 8px; border-radius: 4px; margin: 10px 0;">
+                                <strong style="color: #00ff00;">🟢 FULLY PROTECTED</strong>
                             </div>
                             <div class="decrypted-field">
-                                <span class="field-label">Status:</span>
-                                <span class="field-value" style="color: #00ff00;">QUANTUM-RESISTANT</span>
+                                <span class="field-label">Doc Type:</span>
+                                <span class="field-value" style="color: #00ff00;">${result.type}</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">🔐 KEM:</span>
+                                <span class="field-value" style="color: #00ff00;">${result.encryption} (SAFE 🛡️)</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">🖊️ Signature:</span>
+                                <span class="field-value" style="color: #00ff00;">ML-DSA-65 (VALID ✅)</span>
                             </div>
                             <div class="decrypted-field">
                                 <span class="field-label">Attack:</span>
-                                <span class="field-value" style="color: #00ff00;">BKZ Lattice Reduction (FAILED)</span>
+                                <span class="field-value" style="color: #00ff00;">FAILED (Lattice problem unsolvable)</span>
                             </div>
-                            <div class="decrypted-field">
-                                <span class="field-label">Security:</span>
-                                <span class="field-value" style="color: #00ff00;">NIST Level 3 (192-bit quantum)</span>
-                            </div>
-                            <div class="decrypted-field">
-                                <span class="field-label">Problem:</span>
-                                <span class="field-value" style="color: #00ff00;">Module-LWE (No quantum speedup)</span>
-                            </div>
-                            <p style="color: #00ff00; font-size: 0.8em; margin-top: 8px;">
-                                ✅ Post-Quantum Cryptography successfully defended against attack!<br>
-                                🛡️ Lattice-based crypto remains computationally hard (O(2^192))<br>
-                                📊 Unlike RSA, quantum computers provide NO exponential speedup
+                            <p style="color: #00ff00; font-size: 0.8em; margin-top: 8px; padding: 8px; background: rgba(0,255,0,0.1); border-radius: 4px;">
+                                ✅ Post-Quantum Cryptography blocked quantum attack!<br>
+                                🔐 Module-LWE problem remains computationally hard<br>
+                                📊 No exponential quantum speedup exists for lattices
                             </p>
                         </div>
                     `;
                 }
             }).join('');
+            
+            // Auto-show summary after results are rendered
+            if (results.length >= 4) {
+                setTimeout(() => showScenarioSummary(), 2000);
+            }
         }
         
         async function startDecrypt(itemId) {
@@ -1312,6 +1570,7 @@
                     documentId: item.documentId,
                     type: item.type,
                     encryption: item.encryption,
+                    signature: item.signature,
                     message: 'Post-Quantum Cryptography resisted attack',
                 };
                 log(`----------------------------------------`, 'info');
@@ -1326,12 +1585,17 @@
                     type: item.type,
                     applicant: item.applicant,
                     encryption: item.encryption,
+                    signature: item.signature,
                     attackTime: item.endTime - item.startTime,
-                    signatureForged: !item.signature.includes('ML-DSA'),
+                    signatureForged: item.signature && !item.signature.includes('ML-DSA'),
                 };
                 log(`----------------------------------------`, 'info');
                 log(`💔 DECRYPTED in ${totalElapsed}s: ${item.type} - ${item.encryption} BROKEN!`, 'error');
-                log(`📊 Classical encryption vulnerable to quantum attack`, 'error');
+                if (item.result.signatureForged) {
+                    log(`✍️ SIGNATURE FORGED: ${item.signature} key recovered by Shor's Algorithm!`, 'error');
+                } else {
+                    log(`✅ SIGNATURE PROTECTED: ${item.signature} resisted quantum attack`, 'success');
+                }
                 document.getElementById('qsCurrentOp').textContent = '💔 RSA BROKEN - Private key recovered!';
             }
             
@@ -1343,7 +1607,7 @@
             updateStats();
             
             // Also decrypt signature if RSA
-            if (isRsa && !item.signature.includes('ML-DSA')) {
+            if (isRsa && item.signature && !item.signature.includes('ML-DSA')) {
                 await decryptSignature(item);
             }
         }

@@ -4,6 +4,15 @@ REM  PQC CYBERSEC SIMULATOR - FULLY AUTOMATED DEMO
 REM ═══════════════════════════════════════════════════════════════════════════════
 REM  Starts all services, opens browsers, runs automated Selenium test
 REM  NO USER INPUT REQUIRED - Everything runs automatically
+REM
+REM  HYBRID ENCRYPTION MODEL (Industry Standard - Like TLS/Signal/WhatsApp):
+REM    - KEM: RSA-2048 or ML-KEM-768 (key encapsulation for AES key)
+REM    - Bulk: AES-256-GCM (fast symmetric encryption for data)
+REM    - Signature: RSA-2048 or ML-DSA-65 (authentication)
+REM
+REM  AUTHENTICATION:
+REM    - Form-based login (demo accounts)
+REM    - OAuth 2.0 ready (Google, GitHub) when configured
 REM ═══════════════════════════════════════════════════════════════════════════════
 
 setlocal EnableDelayedExpansion
@@ -17,6 +26,11 @@ echo        Quantum-Resistant vs Classical Cryptography
 echo =============================================================================================
 echo.
 echo   This demo runs AUTOMATICALLY - no input needed!
+echo.
+echo   HYBRID ENCRYPTION (Industry Standard):
+echo     - KEM: RSA-2048 or ML-KEM-768 (key encapsulation)
+echo     - Bulk: AES-256-GCM (fast symmetric encryption)
+echo     - Signature: RSA-2048 or ML-DSA-65 (authentication)
 echo.
 echo   WORKFLOW:
 echo     1. Start Quantum Simulator (GPU)
@@ -135,9 +149,15 @@ echo   Hacker Dashboard:  http://localhost:8183/dashboard
 echo   Quantum Decrypt:   http://localhost:8183/decrypt
 echo   Quantum API:       http://localhost:8184
 echo.
-echo   CREDENTIALS:
-echo     Citizen: john.citizen / Citizen@2024!
-echo     Officer: officer / Officer@2024!
+echo   HYBRID ENCRYPTION MODEL:
+echo     - KEM: RSA-2048 (vulnerable) or ML-KEM-768 (quantum-safe)
+echo     - Bulk: AES-256-GCM (symmetric, fast for data)
+echo     - Sig: RSA-2048 (vulnerable) or ML-DSA-65 (quantum-safe)
+echo.
+echo   AUTHENTICATION:
+echo     - Form Login: john.citizen / Citizen@2024!
+echo     - Form Login: officer / Officer@2024!
+echo     - OAuth 2.0: Configure in application.properties
 echo.
 echo =============================================================================================
 echo.
@@ -148,10 +168,10 @@ REM ═════════════════════════�
 echo [6/6] Running automated Selenium demo...
 echo.
 echo   This demonstrates all 4 crypto scenarios automatically:
-echo     1. RSA + RSA (VULNERABLE)
-echo     2. ML-KEM + ML-DSA (SAFE)
-echo     3. RSA + ML-DSA (MIXED)
-echo     4. ML-KEM + RSA (MIXED)
+echo     1. RSA-KEM + AES-256 + RSA-Sig (FULLY VULNERABLE)
+echo     2. ML-KEM + AES-256 + ML-DSA (FULLY QUANTUM-SAFE)
+echo     3. RSA-KEM + AES-256 + ML-DSA (ENCRYPTION VULNERABLE)
+echo     4. ML-KEM + AES-256 + RSA-Sig (SIGNATURE VULNERABLE)
 echo.
 echo   Watch the browser panels!
 echo.

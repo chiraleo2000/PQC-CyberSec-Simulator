@@ -10,6 +10,15 @@
 #    ./run-demo.sh --docker --manual  - Force Docker mode, skip tests (manual play)
 #    ./run-demo.sh --manual           - Auto-detect mode, skip tests (manual play)
 #
+#  HYBRID ENCRYPTION MODEL (Industry Standard - Like TLS/Signal/WhatsApp):
+#    • KEM: RSA-2048 or ML-KEM-768 (key encapsulation for AES key)
+#    • Bulk: AES-256-GCM (fast symmetric encryption for data)
+#    • Signature: RSA-2048 or ML-DSA-65 (authentication)
+#
+#  AUTHENTICATION:
+#    • Form-based login (demo accounts)
+#    • OAuth 2.0 ready (Google, GitHub) when configured
+#
 #  Runs ALL 4 scenarios comparing Classical vs PQC cryptography
 # ═══════════════════════════════════════════════════════════════════════════════
 

@@ -1,7 +1,9 @@
 package com.pqc.document.config;
 
 import com.pqc.document.security.JwtAuthenticationFilter;
+import com.pqc.document.security.OAuth2AuthenticationSuccessHandler;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -26,7 +28,21 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Security configuration with JWT authentication.
+ * Security configuration with JWT authentication and OAuth 2.0 support.
+ * 
+ * This configuration follows industry best practices:
+ * - Form-based login for traditional web users
+ * - OAuth 2.0 for social login (Google, GitHub, etc.)
+ * - JWT tokens for API authentication
+ * - Session management with cookies for web UI
+ * 
+ * OAuth 2.0 Flow (Authorization Code Grant):
+ * 1. User clicks "Login with Google/GitHub"
+ * 2. Redirect to provider's authorization endpoint
+ * 3. User authenticates with provider
+ * 4. Provider redirects back with authorization code
+ * 5. Server exchanges code for access token
+ * 6. Server creates local session/JWT
  */
 @Configuration
 @EnableWebSecurity
@@ -36,6 +52,10 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
+    private final OAuth2AuthenticationSuccessHandler oAuth2SuccessHandler;
+    
+    @Value("${oauth2.enabled:false}")
+    private boolean oauth2Enabled;
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -83,6 +103,16 @@ public class SecurityConfig {
                         .permitAll())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
+        // Configure OAuth 2.0 if enabled
+        if (oauth2Enabled) {
+            http.oauth2Login(oauth2 -> oauth2
+                    .loginPage("/login")
+                    .defaultSuccessUrl("/dashboard", true)
+                    .successHandler(oAuth2SuccessHandler)
+                    .failureUrl("/login?error=oauth2_error")
+            );
+        }
 
         // Allow H2 console frames
         http.headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));

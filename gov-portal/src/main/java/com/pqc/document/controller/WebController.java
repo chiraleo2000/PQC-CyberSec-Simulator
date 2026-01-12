@@ -7,6 +7,7 @@ import com.pqc.document.repository.UserRepository;
 import com.pqc.model.CryptoAlgorithm;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
@@ -23,6 +24,11 @@ import java.util.UUID;
 /**
  * Web Controller for Government Portal UI
  * Provides real interactive forms for car licensing and tax services
+ * 
+ * Authentication Methods:
+ * - Form-based login (traditional)
+ * - OAuth 2.0 (Google, GitHub) - industry standard for social login
+ * - JWT tokens for API access
  */
 @Controller
 @RequiredArgsConstructor
@@ -31,6 +37,9 @@ public class WebController {
 
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
+    
+    @Value("${oauth2.enabled:false}")
+    private boolean oauth2Enabled;
 
     /**
      * Helper method to get current authenticated user from Spring Security
@@ -61,6 +70,8 @@ public class WebController {
         if (user != null) {
             return "redirect:/dashboard";
         }
+        // Pass OAuth2 enabled flag to template
+        model.addAttribute("oauth2Enabled", oauth2Enabled);
         return "login";
     }
 

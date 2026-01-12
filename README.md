@@ -4,6 +4,81 @@
 
 ---
 
+## � Encryption Model (Industry Standard)
+
+This simulator uses **realistic hybrid encryption** following industry best practices (like TLS, Signal, WhatsApp):
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  HYBRID ENCRYPTION FLOW                                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. KEY ENCAPSULATION (KEM)                                                  │
+│     ├── RSA-2048 (Classical - VULNERABLE to Shor's Algorithm)               │
+│     └── ML-KEM-768 (Post-Quantum - QUANTUM SAFE)                            │
+│         └── Encapsulates random AES-256 key                                 │
+│                                                                              │
+│  2. BULK DATA ENCRYPTION                                                     │
+│     └── AES-256-GCM (Symmetric - Fast for large data)                       │
+│         └── Encrypts documents, files, messages                             │
+│                                                                              │
+│  3. DIGITAL SIGNATURE (Authentication)                                       │
+│     ├── RSA-2048 (Classical - VULNERABLE to Shor's Algorithm)               │
+│     └── ML-DSA-65 (Post-Quantum - QUANTUM SAFE)                             │
+│         └── Signs the encrypted package                                     │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why This Matters
+
+| Component | Classical | Post-Quantum | Purpose |
+|-----------|-----------|--------------|---------|
+| **KEM** | RSA-2048 ❌ | ML-KEM-768 ✅ | Securely exchange AES key |
+| **Bulk Encryption** | AES-256-GCM | AES-256-GCM | Fast encryption for data |
+| **Signature** | RSA-2048 ❌ | ML-DSA-65 ✅ | Verify authenticity |
+
+❌ = Vulnerable to quantum attacks (Shor's Algorithm)
+✅ = Quantum-resistant (Lattice-based)
+
+---
+
+## 🔑 Authentication
+
+### Supported Methods
+
+| Method | Status | Use Case |
+|--------|--------|----------|
+| **Form-based Login** | ✅ Active | Traditional username/password |
+| **OAuth 2.0** | 🔧 Ready | Google, GitHub social login |
+| **JWT Tokens** | ✅ Active | API authentication |
+
+### OAuth 2.0 Setup (Optional)
+
+To enable social login with Google or GitHub:
+
+1. **Get OAuth 2.0 Credentials:**
+   - Google: [Google Cloud Console](https://console.cloud.google.com/)
+   - GitHub: [GitHub Developer Settings](https://github.com/settings/developers)
+
+2. **Configure in `gov-portal/src/main/resources/application.properties`:**
+
+```properties
+oauth2.enabled=true
+
+# Google OAuth 2.0
+spring.security.oauth2.client.registration.google.client-id=YOUR_CLIENT_ID
+spring.security.oauth2.client.registration.google.client-secret=YOUR_SECRET
+spring.security.oauth2.client.registration.google.scope=email,profile
+
+# GitHub OAuth 2.0
+spring.security.oauth2.client.registration.github.client-id=YOUR_CLIENT_ID
+spring.security.oauth2.client.registration.github.client-secret=YOUR_SECRET
+spring.security.oauth2.client.registration.github.scope=user:email,read:user
+```
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -13,7 +88,7 @@ PQC-CyberSec-Simulator/
 ├── secure-messaging/     # Encrypted Messaging Service (Port 8182)
 ├── hacker-console/       # Hacker Attack Simulation (Port 8183)
 ├── quantum-simulator/    # Python cuQuantum GPU Quantum Simulator (Port 8184)
-├── ui-tests/             # Selenium UI Tests (Three-Panel Demo)
+├── ui-tests/             # Selenium UI Tests (Four-Panel Demo)
 ├── docker-compose.yml    # Docker deployment configuration
 └── pom.xml               # Parent Maven configuration
 ```
@@ -181,11 +256,16 @@ The automated demo shows **four Chrome browser panels simultaneously** in a 2×2
 | **BOTTOM-LEFT** | 🕵️ Hacker Harvest | Threat actor intercepting encrypted traffic |
 | **BOTTOM-RIGHT** | ⚛️ Hacker Decrypt | Real-time quantum attack execution & results |
 
-**4 Crypto Scenarios Tested:**
-1. **RSA + RSA** → 🔴 FULLY VULNERABLE (both encryption & signature broken)
-2. **ML-KEM + ML-DSA** → 🟢 FULLY QUANTUM-SAFE (both protected)
-3. **RSA + ML-DSA** → 🟡 MIXED (encryption vulnerable, signature safe)
-4. **ML-KEM + RSA** → 🟡 MIXED (encryption safe, signature vulnerable)
+**4 Crypto Scenarios Tested (Hybrid Encryption):**
+
+| # | KEM (Key Exchange) | Bulk Data | Signature | Result |
+|---|-------------------|-----------|-----------|--------|
+| 1 | RSA-2048 ❌ | AES-256-GCM | RSA-2048 ❌ | 🔴 FULLY VULNERABLE |
+| 2 | ML-KEM-768 ✅ | AES-256-GCM | ML-DSA-65 ✅ | 🟢 FULLY QUANTUM-SAFE |
+| 3 | RSA-2048 ❌ | AES-256-GCM | ML-DSA-65 ✅ | 🟡 ENCRYPTION VULNERABLE |
+| 4 | ML-KEM-768 ✅ | AES-256-GCM | RSA-2048 ❌ | 🟡 SIGNATURE VULNERABLE |
+
+**Note:** All scenarios use AES-256-GCM for bulk data encryption (industry standard). The quantum vulnerability comes from the **KEM** (key exchange) and **Signature** algorithms.
 
 ---
 
@@ -225,30 +305,30 @@ mvn test -Dtest=ComprehensiveCryptoTest
 
 ### What the Demo Shows
 
-The automated demo executes **4 complete cryptographic scenarios** showing all combinations of classical and quantum-safe algorithms:
+The automated demo executes **4 complete cryptographic scenarios** using **industry-standard hybrid encryption** showing all combinations of classical and quantum-safe algorithms:
 
-#### **Scenario 1: ALL CLASSICAL (RSA + RSA)** 🔴 FULLY VULNERABLE
-- **Citizen** submits Car License with RSA-2048 encryption + RSA-2048 signature
-- **Hacker** intercepts ENCRYPTED packets
-- **Quantum Attack** breaks BOTH encryption AND signature
+#### **Scenario 1: RSA-KEM + AES-256 + RSA-Sig** 🔴 FULLY VULNERABLE
+- **Citizen** submits Car License with RSA-2048 key encapsulation + AES-256-GCM bulk encryption + RSA-2048 signature
+- **Hacker** intercepts ENCRYPTED packets (cannot read AES-encrypted data directly)
+- **Quantum Attack** breaks RSA-KEM, recovers AES key → decrypts data; breaks RSA signature
 - **Result:** Complete data breach - all information exposed
 
-#### **Scenario 2: ALL PQC (ML-KEM + ML-DSA)** 🟢 FULLY QUANTUM-SAFE
-- **Citizen** submits Passport Application with ML-KEM-768 encryption + ML-DSA-65 signature
+#### **Scenario 2: ML-KEM + AES-256 + ML-DSA** 🟢 FULLY QUANTUM-SAFE
+- **Citizen** submits Passport Application with ML-KEM-768 key encapsulation + AES-256-GCM bulk encryption + ML-DSA-65 signature
 - **Hacker** intercepts quantum-resistant packets
-- **Quantum Attack** FAILS on both encryption and signature
+- **Quantum Attack** FAILS on both KEM and signature → AES key unrecoverable
 - **Result:** Data remains fully protected - no breach possible
 
-#### **Scenario 3: MIXED (RSA + ML-DSA)** 🟡 ENCRYPTION VULNERABLE
-- **Citizen** submits Birth Certificate with RSA-2048 encryption + ML-DSA-65 signature
+#### **Scenario 3: RSA-KEM + AES-256 + ML-DSA** 🟡 ENCRYPTION VULNERABLE
+- **Citizen** submits Birth Certificate with RSA-2048 key encapsulation + AES-256-GCM bulk encryption + ML-DSA-65 signature
 - **Hacker** intercepts mixed-security packets
-- **Quantum Attack** breaks encryption but signature remains valid
+- **Quantum Attack** breaks RSA-KEM → recovers AES key → decrypts data; signature remains valid
 - **Result:** Partial breach - data exposed but authenticity verified
 
-#### **Scenario 4: MIXED (ML-KEM + RSA)** 🟡 SIGNATURE VULNERABLE
-- **Citizen** submits Medical Records with ML-KEM-768 encryption + RSA-2048 signature
+#### **Scenario 4: ML-KEM + AES-256 + RSA-Sig** 🟡 SIGNATURE VULNERABLE
+- **Citizen** submits Medical Records with ML-KEM-768 key encapsulation + AES-256-GCM bulk encryption + RSA-2048 signature
 - **Hacker** intercepts mixed-security packets
-- **Quantum Attack** breaks signature but encryption holds
+- **Quantum Attack** breaks RSA signature; ML-KEM holds → AES key unrecoverable
 - **Result:** Partial breach - data protected but authenticity compromised
 
 ---
@@ -259,8 +339,9 @@ The automated demo executes **4 complete cryptographic scenarios** showing all c
 ```
 🔒 ENCRYPTED PAYLOAD CAPTURED:
    Document: Car License
-   KEM: RSA-2048 ⚠️ VULNERABLE
-   Signature: RSA-2048 ⚠️ VULNERABLE
+   KEM: RSA-2048 ⚠️ QUANTUM VULNERABLE
+   Symmetric: AES-256-GCM ✅ (key at risk via KEM)
+   Signature: RSA-2048 ⚠️ QUANTUM VULNERABLE
    
    Raw Hex: 3F8CD0C0D3BC1822 BDDC9DB950F71F4D...
 ```
@@ -268,50 +349,56 @@ The automated demo executes **4 complete cryptographic scenarios** showing all c
 **BOTTOM-RIGHT Panel (Hacker Decrypt)** shows quantum attack results:
 ```
 ╔═══════════════════════════════════════════════════════╗
-║  ⚛️ QUANTUM ATTACK RESULT - SCENARIO 1               ║
-╠═══════════════════════════════════════════════════════╣
-║  💔 RSA-2048 BROKEN BY SHOR'S ALGORITHM               ║
-║                                                       ║
-║  📋 DECRYPTED DATA:                                   ║
-║  👤 Name: John Michael Citizen                        ║
-║  📅 DOB: 1985-06-15                                   ║
-║  🏠 Address: 1247 Oak Street, Springfield, IL         ║
-║  🚗 License: DL-8472619                               ║
+║  ⚛️ QUANTUM ATTACK RESULT - SCENARIO 1                   ║
+╠═══════════════════════════════════════════════════════════╣
+║  💔 RSA-2048 KEM BROKEN BY SHOR'S ALGORITHM              ║
+║  🔓 AES-256 KEY RECOVERED → BULK DATA DECRYPTED          ║
+║                                                           ║
+║  📋 DECRYPTED DATA:                                       ║
+║  👤 Name: John Michael Citizen                            ║
+║  📅 DOB: 1985-06-15                                       ║
+║  🏠 Address: 1247 Oak Street, Springfield, IL             ║
+║  🚗 License: DL-8472619                                   ║
 ╚═══════════════════════════════════════════════════════╝
 ```
 
 ### Demo Summary Output
 
-After completing all 4 scenarios, the demo shows:
+After completing all 4 scenarios (using hybrid encryption), the demo shows:
 
 ```
 ╔════════════════════════════════════════════════════════════════════════════════╗
 ║              PQC COMPREHENSIVE CRYPTOGRAPHY TEST COMPLETE                      ║
+║                  (Hybrid Encryption: KEM + AES-256 + Signature)                ║
 ╠════════════════════════════════════════════════════════════════════════════════╣
 ║                                                                                ║
-║  SCENARIO 1: RSA + RSA (Classical)                                            ║
-║     Encryption: 💔 BROKEN (RSA-2048 factored by Shor's Algorithm)             ║
+║  SCENARIO 1: RSA-KEM + AES-256 + RSA-Sig (All Classical)                      ║
+║     KEM:        💔 BROKEN (RSA-2048 factored by Shor's Algorithm)             ║
+║     AES Key:    🔓 RECOVERED (via broken KEM)                                 ║
 ║     Signature:  💔 BROKEN (RSA-2048 signature forged)                         ║
 ║     Result:     🔴 FULLY VULNERABLE - Complete data breach                    ║
 ║                                                                                ║
-║  SCENARIO 2: ML-KEM + ML-DSA (Post-Quantum)                                   ║
-║     Encryption: 🛡️ PROTECTED (Lattice problem resistant)                      ║
+║  SCENARIO 2: ML-KEM + AES-256 + ML-DSA (All Post-Quantum)                     ║
+║     KEM:        🛡️ PROTECTED (Lattice problem resistant)                      ║
+║     AES Key:    🔐 SECURE (KEM unbroken)                                      ║
 ║     Signature:  🛡️ PROTECTED (No known quantum attack)                        ║
 ║     Result:     🟢 FULLY QUANTUM-SAFE - Data fully protected                  ║
 ║                                                                                ║
-║  SCENARIO 3: RSA + ML-DSA (Mixed - PQC Signature)                             ║
-║     Encryption: 💔 BROKEN (RSA-2048 factored)                                 ║
+║  SCENARIO 3: RSA-KEM + AES-256 + ML-DSA (Mixed - PQC Signature)               ║
+║     KEM:        💔 BROKEN (RSA-2048 factored)                                 ║
+║     AES Key:    🔓 RECOVERED (via broken KEM)                                 ║
 ║     Signature:  🛡️ PROTECTED (ML-DSA quantum-resistant)                       ║
 ║     Result:     🟡 MIXED SECURITY - Encryption compromised                    ║
 ║                                                                                ║
-║  SCENARIO 4: ML-KEM + RSA (Mixed - PQC Encryption)                            ║
-║     Encryption: 🛡️ PROTECTED (ML-KEM quantum-resistant)                       ║
+║  SCENARIO 4: ML-KEM + AES-256 + RSA-Sig (Mixed - PQC Encryption)              ║
+║     KEM:        🛡️ PROTECTED (ML-KEM quantum-resistant)                       ║
+║     AES Key:    🔐 SECURE (KEM unbroken)                                      ║
 ║     Signature:  💔 BROKEN (RSA-2048 signature forged)                         ║
 ║     Result:     🟡 MIXED SECURITY - Signature compromised                     ║
 ║                                                                                ║
 ╠════════════════════════════════════════════════════════════════════════════════╣
 ║  ✅ ALL TESTS PASSED                                                           ║
-║  ⚛️ Total Quantum Attacks: 8 (4 encryption + 4 signature)                     ║
+║  ⚛️ Total Quantum Attacks: 8 (4 KEM + 4 signature)                            ║
 ║  🔐 Quantum-Safe Algorithms: 100% protection rate                             ║
 ║  💔 Classical Algorithms: 0% protection rate                                  ║
 ╚════════════════════════════════════════════════════════════════════════════════╝
@@ -332,8 +419,10 @@ After completing all 4 scenarios, the demo shows:
 
 | Algorithm | Type | Quantum Threat |
 |-----------|------|----------------|
-| **RSA-2048** | Digital Signature | ❌ Broken by Shor's |
-| **AES-256** | Symmetric | ⚡ Reduced by Grover's |
+| **RSA-2048** | Key Encapsulation/Signature | ❌ Broken by Shor's Algorithm |
+| **AES-256** | Symmetric Bulk Encryption | ✅ Safe (key secured by KEM) |
+
+**Note:** AES-256 itself is quantum-resistant (Grover's only halves effective key bits to 128-bit). The vulnerability comes from how the AES key is exchanged (the KEM algorithm).
 
 ---
 

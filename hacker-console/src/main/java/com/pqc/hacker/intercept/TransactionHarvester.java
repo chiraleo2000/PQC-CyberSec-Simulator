@@ -238,7 +238,8 @@ public class TransactionHarvester {
         String algo = tx.getEncryptionAlgorithm().toUpperCase();
         
         if (algo.contains("RSA")) {
-            // RSA is vulnerable to Shor's algorithm - DECRYPT the encrypted session key
+            // RSA-KEM is vulnerable to Shor's algorithm
+            // ATTACK FLOW: Break RSA → Recover private key → Decapsulate AES-256 key → Decrypt bulk data
             int keyBits = algo.contains("4096") ? 4096 : 2048;
             BigInteger fakeModulus = generateFakeRsaModulus(keyBits);
             
@@ -247,39 +248,41 @@ public class TransactionHarvester {
             
             result.setDecrypted(shorsResult.isSuccess());
             result.setForged(false);
-            result.setAttackType("Shor's Algorithm (RSA Key Factorization)");
+            result.setAttackType("Shor's Algorithm (RSA-KEM Key Recovery)");
             result.setQubitsUsed(shorsResult.getQubitsRequired());
             result.setAttackTimeMs(shorsResult.getExecutionTimeMs());
             result.setDetails(shorsResult.getMessage() + 
-                    " | RSA-" + keyBits + " private key RECOVERED! Can decrypt all session keys.");
+                    " | RSA-" + keyBits + " KEM BROKEN → AES-256 session key DECAPSULATED → Bulk data DECRYPTED!");
             
             if (shorsResult.isSuccess()) {
-                result.setDecryptedPreview("🔓 [DECRYPTED] Document for " + tx.getApplicant() + 
-                        " - " + tx.getDocumentType() + " | All encrypted content accessible!");
+                result.setDecryptedPreview("🔓 [HYBRID ATTACK SUCCESS] " + 
+                        "Step 1: RSA-" + keyBits + " factored → Step 2: AES-256 key recovered → " +
+                        "Step 3: Document for " + tx.getApplicant() + " (" + tx.getDocumentType() + ") DECRYPTED!");
             }
             
         } else if (algo.contains("ML_KEM") || algo.contains("ML-KEM") || algo.contains("KYBER")) {
-            // ML-KEM is quantum-resistant - lattice attack FAILS
+            // ML-KEM (Kyber) is quantum-resistant - AES-256 key remains protected
             CuQuantumGpuSimulator.LatticeAttackResult latticeResult = 
                     quantumSimulator.simulateLatticeAttack(algo, tx.getEncryptedPayload());
             
             result.setDecrypted(false);
             result.setForged(false);
-            result.setAttackType("Lattice Reduction Attack (BKZ/LLL)");
+            result.setAttackType("Lattice Reduction Attack (BKZ/LLL) on ML-KEM");
             result.setQubitsUsed(0);
             result.setAttackTimeMs(latticeResult.getExecutionTimeMs());
             result.setDetails("🛡️ " + latticeResult.getMessage() + 
-                    " | ML-KEM-768 based on Module-LWE - quantum computers cannot break this!");
+                    " | ML-KEM-768 PROTECTED → AES-256 key SAFE → Bulk data CANNOT be decrypted!");
             
         } else if (algo.contains("AES")) {
-            // AES with Grover's algorithm - still secure with AES-256
+            // AES-256 itself is quantum-resistant (Grover's only reduces to 128-bit)
+            // The vulnerability is in the KEM that wraps the AES key, NOT AES itself!
             result.setDecrypted(false);
             result.setForged(false);
-            result.setAttackType("Grover's Algorithm (Symmetric Key Search)");
+            result.setAttackType("Grover's Algorithm (AES Key Search)");
             result.setQubitsUsed(256);
             result.setAttackTimeMs(100);
-            result.setDetails("🛡️ AES-256 remains secure. Grover's provides sqrt speedup, " +
-                    "reducing security from 256-bit to 128-bit (still computationally infeasible).");
+            result.setDetails("🛡️ AES-256 SECURE! Grover's reduces 256-bit → 128-bit (still infeasible). " +
+                    "Note: Quantum threat is to the KEM that wraps this key, not AES itself!");
             
         } else {
             result.setDecrypted(false);
@@ -293,7 +296,12 @@ public class TransactionHarvester {
 
     /**
      * Attack SIGNATURE algorithm (Digital Signature)
-     * Uses Shor's algorithm to forge RSA signatures, attempts to forge ML-DSA signatures
+     * Uses Shor's algorithm to forge RSA signatures, attempts to forge ML-DSA signatures.
+     * 
+     * SIGNATURE ATTACK CONSEQUENCES:
+     * - If RSA signature is broken → Hacker can FORGE documents (identity theft)
+     * - Can create fake government documents that pass verification
+     * - Can impersonate users and submit fraudulent applications
      */
     private AttackResult attackSignature(InterceptedTransaction tx) {
         AttackResult result = new AttackResult();
@@ -305,7 +313,7 @@ public class TransactionHarvester {
         String algo = tx.getSignatureAlgorithm().toUpperCase();
         
         if (algo.contains("RSA")) {
-            // RSA signatures are vulnerable - can FORGE new signatures
+            // RSA signatures are vulnerable - can recover signing key and FORGE documents
             int keyBits = algo.contains("4096") ? 4096 : 2048;
             BigInteger fakeModulus = generateFakeRsaModulus(keyBits);
             
@@ -314,19 +322,20 @@ public class TransactionHarvester {
             
             result.setDecrypted(false);
             result.setForged(shorsResult.isSuccess());
-            result.setAttackType("Shor's Algorithm (RSA Signature Forgery)");
+            result.setAttackType("Shor's Algorithm (RSA Signature Key Recovery)");
             result.setQubitsUsed(shorsResult.getQubitsRequired());
             result.setAttackTimeMs(shorsResult.getExecutionTimeMs());
             result.setDetails(shorsResult.getMessage() + 
-                    " | RSA-" + keyBits + " signing key RECOVERED! Can forge ANY document!");
+                    " | RSA-" + keyBits + " signing key RECOVERED → Can FORGE any " + tx.getDocumentType() + "!");
             
             if (shorsResult.isSuccess()) {
-                result.setDecryptedPreview("✍️ [FORGED] Can create fake " + tx.getDocumentType() + 
-                        " for " + tx.getApplicant() + " with valid signature!");
+                result.setDecryptedPreview("✍️ [FORGERY ENABLED] " + 
+                        "Can create FAKE " + tx.getDocumentType() + " for " + tx.getApplicant() + 
+                        " with VALID signature! Identity theft possible!");
             }
             
         } else if (algo.contains("ML_DSA") || algo.contains("ML-DSA") || algo.contains("DILITHIUM")) {
-            // ML-DSA signatures are quantum-resistant - forgery FAILS
+            // ML-DSA (Dilithium) signatures are quantum-resistant - forgery FAILS
             result.setDecrypted(false);
             result.setForged(false);
             result.setAttackType("Lattice-Based Signature Forgery Attempt");

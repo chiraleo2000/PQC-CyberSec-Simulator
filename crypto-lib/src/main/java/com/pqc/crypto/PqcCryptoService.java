@@ -386,4 +386,192 @@ public class PqcCryptoService {
                 new java.security.spec.PKCS8EncodedKeySpec(privateKeyBytes));
         return new KeyPair(publicKey, privateKey);
     }
+
+    // ==================== RSA Key Encapsulation (for Hybrid) ====================
+
+    /**
+     * Encapsulate a random AES-256 key using RSA (OAEP padding).
+     * This simulates RSA-KEM for key exchange in hybrid encryption.
+     * 
+     * ⚠️ WARNING: RSA-KEM is vulnerable to Shor's algorithm!
+     * 
+     * @param publicKey RSA public key
+     * @return EncapsulationResult with encrypted AES key and the shared secret
+     */
+    public EncapsulationResult encapsulateRSA(PublicKey publicKey) throws GeneralSecurityException {
+        log.warn("Encapsulating with RSA-2048 (QUANTUM VULNERABLE)");
+
+        // Generate random AES-256 key as shared secret
+        SecretKey aesKey = generateAESKey(256);
+        byte[] sharedSecret = aesKey.getEncoded();
+
+        // Encrypt the AES key with RSA-OAEP
+        Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding", BC_PROVIDER);
+        cipher.init(Cipher.ENCRYPT_MODE, publicKey);
+        byte[] encapsulation = cipher.doFinal(sharedSecret);
+
+        log.info("RSA-KEM encapsulation complete - Encapsulated: {} bytes, Secret: 256 bits",
+                encapsulation.length);
+
+        return EncapsulationResult.of(encapsulation, sharedSecret, CryptoAlgorithm.RSA_2048);
+    }
+
+    /**
+     * Decapsulate (decrypt) the AES key using RSA private key.
+     * 
+     * @param encapsulation Encrypted AES key
+     * @param privateKey RSA private key
+     * @return The decrypted AES-256 key bytes
+     */
+    public byte[] decapsulateRSA(byte[] encapsulation, PrivateKey privateKey)
+            throws GeneralSecurityException {
+        log.debug("Decapsulating RSA-KEM...");
+
+        Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding", BC_PROVIDER);
+        cipher.init(Cipher.DECRYPT_MODE, privateKey);
+        byte[] sharedSecret = cipher.doFinal(encapsulation);
+
+        log.info("RSA-KEM decapsulation complete - Secret: {} bytes", sharedSecret.length);
+        return sharedSecret;
+    }
+
+    // ==================== HYBRID ENCRYPTION (Industry Standard) ====================
+
+    /**
+     * Perform hybrid encryption using realistic web service practices.
+     * 
+     * This is how modern secure systems (TLS, Signal, WhatsApp) work:
+     * 1. Generate random AES-256 key
+     * 2. Encapsulate AES key using KEM (RSA or ML-KEM)
+     * 3. Encrypt bulk data with AES-256-GCM
+     * 4. Sign the package for authentication
+     * 
+     * @param plaintext Data to encrypt
+     * @param kemPublicKey Public key for key encapsulation (RSA or ML-KEM)
+     * @param signingPrivateKey Private key for signing (RSA or ML-DSA)
+     * @param kemAlgorithm KEM algorithm to use
+     * @param signatureAlgorithm Signature algorithm to use
+     * @return HybridEncryptionResult with all crypto artifacts
+     */
+    public com.pqc.model.HybridEncryptionResult hybridEncrypt(
+            byte[] plaintext,
+            PublicKey kemPublicKey,
+            PrivateKey signingPrivateKey,
+            CryptoAlgorithm kemAlgorithm,
+            CryptoAlgorithm signatureAlgorithm) throws GeneralSecurityException {
+        
+        log.info("Hybrid encryption: KEM={}, Signature={}", kemAlgorithm, signatureAlgorithm);
+        
+        // Step 1: Key Encapsulation (establish shared AES-256 key)
+        long kemStart = System.nanoTime();
+        EncapsulationResult kemResult;
+        if (kemAlgorithm == CryptoAlgorithm.ML_KEM) {
+            kemResult = encapsulateMLKEM(kemPublicKey);
+        } else {
+            kemResult = encapsulateRSA(kemPublicKey);
+        }
+        
+        // Step 2: Bulk Encryption with AES-256-GCM
+        byte[] sharedSecret = kemResult.getSharedSecret();
+        EncryptionResult aesResult = encryptWithSharedSecret(plaintext, sharedSecret, 256);
+        long kemEnd = System.nanoTime();
+        
+        // Step 3: Digital Signature over encrypted package
+        long sigStart = System.nanoTime();
+        byte[] dataToSign = concatenate(
+            kemAlgorithm.name().getBytes(),
+            kemResult.getEncapsulation(),
+            aesResult.getIv(),
+            aesResult.getCiphertext()
+        );
+        
+        SignatureResult sigResult;
+        if (signatureAlgorithm == CryptoAlgorithm.ML_DSA) {
+            sigResult = signWithMLDSA(dataToSign, signingPrivateKey);
+        } else {
+            sigResult = signWithRSA(dataToSign, signingPrivateKey);
+        }
+        long sigEnd = System.nanoTime();
+        
+        return com.pqc.model.HybridEncryptionResult.of(
+            kemResult.getEncapsulation(),
+            aesResult.getCiphertext(),
+            aesResult.getIv(),
+            kemAlgorithm,
+            sigResult.getSignature(),
+            signatureAlgorithm,
+            kemEnd - kemStart,
+            sigEnd - sigStart
+        );
+    }
+
+    /**
+     * Decrypt hybrid encrypted data.
+     * 
+     * @param encryptedResult The hybrid encryption result
+     * @param kemPrivateKey Private key for key decapsulation
+     * @param signingPublicKey Public key for signature verification
+     * @return Decrypted plaintext
+     */
+    public byte[] hybridDecrypt(
+            com.pqc.model.HybridEncryptionResult encryptedResult,
+            PrivateKey kemPrivateKey,
+            PublicKey signingPublicKey) throws GeneralSecurityException {
+        
+        log.info("Hybrid decryption: KEM={}, Signature={}", 
+                encryptedResult.getKemAlgorithm(), encryptedResult.getSignatureAlgorithm());
+        
+        // Step 1: Verify signature
+        byte[] dataToVerify = concatenate(
+            encryptedResult.getKemAlgorithm().name().getBytes(),
+            encryptedResult.getEncapsulatedKey(),
+            encryptedResult.getIv(),
+            encryptedResult.getCiphertext()
+        );
+        
+        boolean signatureValid;
+        if (encryptedResult.getSignatureAlgorithm() == CryptoAlgorithm.ML_DSA) {
+            signatureValid = verifyMLDSASignature(dataToVerify, encryptedResult.getSignature(), signingPublicKey);
+        } else {
+            signatureValid = verifyRSASignature(dataToVerify, encryptedResult.getSignature(), signingPublicKey);
+        }
+        
+        if (!signatureValid) {
+            throw new GeneralSecurityException("Signature verification failed!");
+        }
+        
+        // Step 2: Decapsulate AES key
+        byte[] sharedSecret;
+        if (encryptedResult.getKemAlgorithm() == CryptoAlgorithm.ML_KEM) {
+            sharedSecret = decapsulateMLKEM(encryptedResult.getEncapsulatedKey(), kemPrivateKey);
+        } else {
+            sharedSecret = decapsulateRSA(encryptedResult.getEncapsulatedKey(), kemPrivateKey);
+        }
+        
+        // Step 3: Decrypt bulk data with AES-256
+        return decryptWithSharedSecret(
+            encryptedResult.getCiphertext(),
+            encryptedResult.getIv(),
+            sharedSecret,
+            256
+        );
+    }
+
+    /**
+     * Helper method to concatenate byte arrays.
+     */
+    private byte[] concatenate(byte[]... arrays) {
+        int totalLength = 0;
+        for (byte[] arr : arrays) {
+            totalLength += arr.length;
+        }
+        byte[] result = new byte[totalLength];
+        int offset = 0;
+        for (byte[] arr : arrays) {
+            System.arraycopy(arr, 0, result, offset, arr.length);
+            offset += arr.length;
+        }
+        return result;
+    }
 }
+

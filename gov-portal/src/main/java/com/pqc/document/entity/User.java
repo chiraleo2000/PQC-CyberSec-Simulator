@@ -102,6 +102,13 @@ public class User {
     @Column(name = "key_generated_at")
     private LocalDateTime keyGeneratedAt;
 
+    // OAuth 2.0 fields for social login
+    @Column(name = "oauth2_provider", length = 50)
+    private String oauth2Provider;
+
+    @Column(name = "oauth2_provider_id", length = 200)
+    private String oauth2ProviderId;
+
     /**
      * User roles with permissions.
      */
