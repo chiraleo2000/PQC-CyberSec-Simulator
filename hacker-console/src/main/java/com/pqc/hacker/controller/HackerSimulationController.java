@@ -58,7 +58,7 @@ public class HackerSimulationController {
          * GET /api/hacker/status
          */
         @GetMapping("/status")
-        public ResponseEntity<?> getStatus() {
+        public ResponseEntity<Object> getStatus() {
                 return ResponseEntity.ok(Map.of(
                                 "service", "PQC Hacker Simulation",
                                 "purpose", "EDUCATIONAL DEMONSTRATION ONLY",
@@ -76,7 +76,7 @@ public class HackerSimulationController {
          * POST /api/hacker/intercept/document
          */
         @PostMapping("/intercept/document")
-        public ResponseEntity<?> interceptDocument(@RequestBody InterceptRequest request) {
+        public ResponseEntity<Object> interceptDocument(@RequestBody InterceptRequest request) {
                 log.warn("🕵️ INTERCEPTION REQUEST: Document {}", request.targetId());
 
                 InterceptionService.InterceptionResult result = interceptionService
@@ -90,7 +90,7 @@ public class HackerSimulationController {
          * POST /api/hacker/intercept/message
          */
         @PostMapping("/intercept/message")
-        public ResponseEntity<?> interceptMessage(@RequestBody InterceptRequest request) {
+        public ResponseEntity<Object> interceptMessage(@RequestBody InterceptRequest request) {
                 log.warn("🕵️ INTERCEPTION REQUEST: Message {}", request.targetId());
 
                 InterceptionService.InterceptionResult result = interceptionService
@@ -104,7 +104,7 @@ public class HackerSimulationController {
          * POST /api/hacker/intercept/bulk
          */
         @PostMapping("/intercept/bulk")
-        public ResponseEntity<?> bulkHarvest() {
+        public ResponseEntity<Object> bulkHarvest() {
                 log.warn("🕵️ BULK HARVEST REQUEST");
 
                 InterceptionService.BulkHarvestResult result = interceptionService.bulkHarvestMessages();
@@ -117,7 +117,7 @@ public class HackerSimulationController {
          * GET /api/hacker/intercept/live
          */
         @GetMapping("/intercept/live")
-        public ResponseEntity<?> liveIntercept() {
+        public ResponseEntity<Object> liveIntercept() {
                 TransactionHarvester.InterceptionResult result = transactionHarvester.harvestTransactionLogs();
                 
                 return ResponseEntity.ok(Map.of(
@@ -134,7 +134,7 @@ public class HackerSimulationController {
          * POST /api/hacker/harvest/packet
          */
         @PostMapping("/harvest/packet")
-        public ResponseEntity<?> harvestPacket(@RequestBody Map<String, Object> packet) {
+        public ResponseEntity<Object> harvestPacket(@RequestBody Map<String, Object> packet) {
                 log.info("📦 Storing harvested packet: {}", packet.get("documentId"));
                 // Store in memory for later quantum attack
                 return ResponseEntity.ok(Map.of("stored", true, "packetId", packet.get("id")));
@@ -165,7 +165,7 @@ public class HackerSimulationController {
          * POST /api/hacker/attack/hndl
          */
         @PostMapping("/attack/hndl")
-        public ResponseEntity<?> executeHNDLAttack(@RequestBody HNDLRequest request) {
+        public ResponseEntity<Object> executeHNDLAttack(@RequestBody HNDLRequest request) {
                 log.warn("🚨 HNDL ATTACK: {} {}", request.targetType(), request.targetId());
 
                 QuantumAttackService.HNDLAttackResult result = quantumAttackService
@@ -179,7 +179,7 @@ public class HackerSimulationController {
          * POST /api/hacker/attack/shor
          */
         @PostMapping("/attack/shor")
-        public ResponseEntity<?> executeShorAttack(@RequestBody AttackRequest request) {
+        public ResponseEntity<Object> executeShorAttack(@RequestBody AttackRequest request) {
                 log.warn("🚨 SHOR'S ATTACK: {}", request.harvestId());
 
                 try {
@@ -197,7 +197,7 @@ public class HackerSimulationController {
          * POST /api/hacker/attack/grover
          */
         @PostMapping("/attack/grover")
-        public ResponseEntity<?> executeGroverAttack(@RequestBody AttackRequest request) {
+        public ResponseEntity<Object> executeGroverAttack(@RequestBody AttackRequest request) {
                 log.warn("🚨 GROVER'S ATTACK: {}", request.harvestId());
 
                 try {
@@ -215,7 +215,7 @@ public class HackerSimulationController {
          * POST /api/hacker/attack/all
          */
         @PostMapping("/attack/all")
-        public ResponseEntity<?> attackAll() {
+        public ResponseEntity<Object> attackAll() {
                 log.warn("🚨 BULK QUANTUM ATTACK");
 
                 List<AttackAttempt> results = quantumAttackService.attackAllVulnerable();
@@ -239,7 +239,7 @@ public class HackerSimulationController {
          * GET /api/hacker/statistics
          */
         @GetMapping("/statistics")
-        public ResponseEntity<?> getStatistics() {
+        public ResponseEntity<Object> getStatistics() {
                 return ResponseEntity.ok(quantumAttackService.getStatistics());
         }
 
@@ -250,7 +250,7 @@ public class HackerSimulationController {
          * GET /api/hacker/scenarios
          */
         @GetMapping("/scenarios")
-        public ResponseEntity<?> getScenarios() {
+        public ResponseEntity<Object> getScenarios() {
                 return ResponseEntity.ok(List.of(
                                 Map.of(
                                                 "id", "HNDL_RSA",
@@ -297,7 +297,7 @@ public class HackerSimulationController {
          * GET /api/hacker/timeline
          */
         @GetMapping("/timeline")
-        public ResponseEntity<?> getQuantumTimeline() {
+        public ResponseEntity<Object> getQuantumTimeline() {
                 return ResponseEntity.ok(Map.of(
                                 "currentYear", 2024,
                                 "milestones", List.of(
@@ -324,7 +324,7 @@ public class HackerSimulationController {
          * GET /api/hacker/gpu
          */
         @GetMapping("/gpu")
-        public ResponseEntity<?> getGpuInfo() {
+        public ResponseEntity<Object> getGpuInfo() {
                 log.info("🎮 GPU info requested");
                 return ResponseEntity.ok(cuQuantumSimulator.getGpuInfo());
         }
@@ -334,7 +334,7 @@ public class HackerSimulationController {
          * GET /api/hacker/gpu/status
          */
         @GetMapping("/gpu/status")
-        public ResponseEntity<?> getGpuStatus() {
+        public ResponseEntity<Object> getGpuStatus() {
                 log.info("🎮 GPU status requested");
                 return ResponseEntity.ok(Map.of(
                         "gpuInfo", cuQuantumSimulator.getGpuInfo(),
@@ -356,7 +356,7 @@ public class HackerSimulationController {
          * GET /api/hacker/quantum/logs
          */
         @GetMapping("/quantum/logs")
-        public ResponseEntity<?> getQuantumLogs() {
+        public ResponseEntity<Object> getQuantumLogs() {
                 log.info("📋 Quantum process logs requested");
                 return ResponseEntity.ok(Map.of(
                         "logs", cuQuantumSimulator.getProcessLogs(),
@@ -374,7 +374,7 @@ public class HackerSimulationController {
          * DELETE /api/hacker/quantum/logs
          */
         @DeleteMapping("/quantum/logs")
-        public ResponseEntity<?> clearQuantumLogs() {
+        public ResponseEntity<Object> clearQuantumLogs() {
                 log.info("🗑️ Clearing quantum process logs");
                 cuQuantumSimulator.getProcessLogs().clear();
                 return ResponseEntity.ok(Map.of("cleared", true, KEY_MESSAGE, "Process logs cleared"));
@@ -387,7 +387,7 @@ public class HackerSimulationController {
          * This fetches REAL encrypted data from gov-portal /api/transactions endpoint.
          */
         @PostMapping("/harvest/transactions")
-        public ResponseEntity<?> harvestTransactions() {
+        public ResponseEntity<Object> harvestTransactions() {
                 log.warn("🕵️ HARVEST REQUEST: Intercepting encrypted transactions from Government Portal...");
                 
                 TransactionHarvester.InterceptionResult result = transactionHarvester.harvestTransactionLogs();
@@ -408,7 +408,7 @@ public class HackerSimulationController {
          * Uses Shor's Algorithm to break RSA, demonstrates ML-KEM resistance.
          */
         @PostMapping("/quantum-attack")
-        public ResponseEntity<?> executeQuantumAttack() {
+        public ResponseEntity<Object> executeQuantumAttack() {
                 log.warn("⚛️ QUANTUM ATTACK: Deploying Shor's Algorithm via cuQuantum GPU Simulator...");
                 
                 TransactionHarvester.QuantumAttackReport report = transactionHarvester.executeQuantumAttack();
@@ -430,7 +430,7 @@ public class HackerSimulationController {
          * POST /api/hacker/hndl/full
          */
         @PostMapping("/hndl/full")
-        public ResponseEntity<?> executeFullHNDL() {
+        public ResponseEntity<Object> executeFullHNDL() {
                 log.warn("🚨 FULL HNDL ATTACK: Harvest Now, Decrypt Later scenario initiated!");
                 
                 // Phase 1: Harvest
@@ -475,7 +475,7 @@ public class HackerSimulationController {
          * GET /api/hacker/harvest/count
          */
         @GetMapping("/harvest/count")
-        public ResponseEntity<?> getHarvestedCount() {
+        public ResponseEntity<Object> getHarvestedCount() {
                 return ResponseEntity.ok(Map.of(
                         "harvestedCount", transactionHarvester.getHarvestedCount()
                 ));
@@ -486,7 +486,7 @@ public class HackerSimulationController {
          * DELETE /api/hacker/harvest
          */
         @DeleteMapping("/harvest")
-        public ResponseEntity<?> clearHarvest() {
+        public ResponseEntity<Object> clearHarvest() {
                 transactionHarvester.clearHarvestedData();
                 return ResponseEntity.ok(Map.of(
                         KEY_MESSAGE, "Harvested data cleared",
@@ -501,7 +501,7 @@ public class HackerSimulationController {
          * GET /api/hacker/quantum/status
          */
         @GetMapping("/quantum/status")
-        public ResponseEntity<?> getQuantumStatus() {
+        public ResponseEntity<Object> getQuantumStatus() {
                 log.info("⚛️ Checking Python cuQuantum service status...");
                 return ResponseEntity.ok(Map.of(
                         "pythonService", pythonQuantumClient.getStatus(),
@@ -515,7 +515,7 @@ public class HackerSimulationController {
          * POST /api/hacker/quantum/shor
          */
         @PostMapping("/quantum/shor")
-        public ResponseEntity<?> runShorsAlgorithm(@RequestBody(required = false) ShorsRequest request) {
+        public ResponseEntity<Object> runShorsAlgorithm(@RequestBody(required = false) ShorsRequest request) {
                 int keyBits = request != null ? request.keyBits() : 2048;
                 BigInteger modulus = BigInteger.valueOf(request != null ? request.modulus() : 15);
                 
@@ -531,7 +531,7 @@ public class HackerSimulationController {
          * POST /api/hacker/quantum/grover
          */
         @PostMapping("/quantum/grover")
-        public ResponseEntity<?> runGroversAlgorithm(@RequestBody(required = false) GroversRequest request) {
+        public ResponseEntity<Object> runGroversAlgorithm(@RequestBody(required = false) GroversRequest request) {
                 int keyBits = request != null ? request.keyBits() : 256;
                 
                 log.info("🔍 GROVER'S ALGORITHM: Searching {}-bit key space via Python cuQuantum...", keyBits);
@@ -546,7 +546,7 @@ public class HackerSimulationController {
          * POST /api/hacker/quantum/attack/rsa
          */
         @PostMapping("/quantum/attack/rsa")
-        public ResponseEntity<?> attackRsa(@RequestBody(required = false) RsaAttackRequest request) {
+        public ResponseEntity<Object> attackRsa(@RequestBody(required = false) RsaAttackRequest request) {
                 int keySize = request != null ? request.keySize() : 2048;
                 
                 log.warn("⚛️ QUANTUM RSA ATTACK: RSA-{} via Python cuQuantum GPU...", keySize);
@@ -561,7 +561,7 @@ public class HackerSimulationController {
          * POST /api/hacker/quantum/attack/lattice
          */
         @PostMapping("/quantum/attack/lattice")
-        public ResponseEntity<?> attackLattice(@RequestBody(required = false) LatticeAttackRequest request) {
+        public ResponseEntity<Object> attackLattice(@RequestBody(required = false) LatticeAttackRequest request) {
                 String algorithm = request != null ? request.algorithm() : "ML-KEM-768";
                 int securityLevel = request != null ? request.securityLevel() : 3;
                 

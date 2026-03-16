@@ -246,8 +246,8 @@
                     </p>
                     
                     <div class="encryption-options">
-                        <label class="encryption-option vulnerable" onclick="selectEncryption(this, 'RSA_2048')" onkeydown="if(event.key==='Enter'||event.key===' '){selectEncryption(this, 'RSA_2048');event.preventDefault();}" tabindex="0" role="radio">
-                            <input type="radio" name="encryptionType" value="RSA_2048" checked>
+                        <label class="encryption-option vulnerable">
+                            <input type="radio" name="encryptionType" value="RSA_2048" checked onchange="selectEncryption(this.closest('.encryption-option'), 'RSA_2048')">
                             <div class="name">⚠️ RSA-2048 (Classical)</div>
                             <div class="description">
                                 Traditional encryption. Vulnerable to future quantum attacks.
@@ -255,8 +255,8 @@
                             </div>
                         </label>
                         
-                        <label class="encryption-option secure" onclick="selectEncryption(this, 'ML_KEM')" onkeydown="if(event.key==='Enter'||event.key===' '){selectEncryption(this, 'ML_KEM');event.preventDefault();}" tabindex="0" role="radio">
-                            <input type="radio" name="encryptionType" value="ML_KEM">
+                        <label class="encryption-option secure">
+                            <input type="radio" name="encryptionType" value="ML_KEM" onchange="selectEncryption(this.closest('.encryption-option'), 'ML_KEM')">
                             <div class="name">✅ ML-KEM (Quantum-Safe)</div>
                             <div class="description">
                                 NIST FIPS 203 approved. Protected against quantum computers.
@@ -279,16 +279,16 @@
                     </p>
                     
                     <div class="encryption-options">
-                        <label class="encryption-option vulnerable" onclick="selectSignature(this, 'RSA_2048')" onkeydown="if(event.key==='Enter'||event.key===' '){selectSignature(this, 'RSA_2048');event.preventDefault();}" tabindex="0" role="radio">
-                            <input type="radio" name="signatureType" value="RSA_2048" checked>
+                        <label class="encryption-option vulnerable">
+                            <input type="radio" name="signatureType" value="RSA_2048" checked onchange="selectSignature(this.closest('.encryption-option'), 'RSA_2048')">
                             <div class="name">⚠️ RSA-2048 (Classical)</div>
                             <div class="description">
                                 Traditional signatures. Vulnerable to quantum forgery attacks.
                             </div>
                         </label>
                         
-                        <label class="encryption-option secure" onclick="selectSignature(this, 'ML_DSA')" onkeydown="if(event.key==='Enter'||event.key===' '){selectSignature(this, 'ML_DSA');event.preventDefault();}" tabindex="0" role="radio">
-                            <input type="radio" name="signatureType" value="ML_DSA">
+                        <label class="encryption-option secure">
+                            <input type="radio" name="signatureType" value="ML_DSA" onchange="selectSignature(this.closest('.encryption-option'), 'ML_DSA')">
                             <div class="name">✅ ML-DSA (Dilithium)</div>
                             <div class="description">
                                 NIST FIPS 204 approved. Quantum-resistant signatures.

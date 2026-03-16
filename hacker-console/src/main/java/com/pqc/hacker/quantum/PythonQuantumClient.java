@@ -176,7 +176,7 @@ public class PythonQuantumClient {
      */
     public GroversResponse runGroversAlgorithm(int keyBits) {
         if (!serviceAvailable) {
-            return createFallbackGroversResponse(keyBits);
+            return createFallbackGroversResponse();
         }
         
         try {
@@ -201,11 +201,11 @@ public class PythonQuantumClient {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            return createFallbackGroversResponse(0);
+            return createFallbackGroversResponse();
         }
     }
     
-    private GroversResponse createFallbackGroversResponse(int keyBits) {
+    private GroversResponse createFallbackGroversResponse() {
         GroversResponse response = new GroversResponse();
         response.setAlgorithm("Grover's Algorithm (Java Fallback)");
         response.setPurpose("Symmetric Key Search");
@@ -260,7 +260,7 @@ public class PythonQuantumClient {
      */
     public LatticeAttackResponse attackLattice(String algorithm, int securityLevel) {
         if (!serviceAvailable) {
-            return createFallbackLatticeResponse(algorithm, securityLevel);
+            return createFallbackLatticeResponse(algorithm);
         }
         
         try {
@@ -286,11 +286,11 @@ public class PythonQuantumClient {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            return createFallbackLatticeResponse(algorithm, 0);
+            return createFallbackLatticeResponse(algorithm);
         }
     }
     
-    private LatticeAttackResponse createFallbackLatticeResponse(String algorithm, int securityLevel) {
+    private LatticeAttackResponse createFallbackLatticeResponse(String algorithm) {
         LatticeAttackResponse response = new LatticeAttackResponse();
         response.setAttackType("Quantum-Enhanced BKZ (Java Fallback)");
         response.setTarget(algorithm);

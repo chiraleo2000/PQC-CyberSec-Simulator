@@ -483,7 +483,7 @@ class ShorsAlgorithm:
             raise TimeoutError(TIMEOUT_ERROR_MESSAGE)
         
         # Steps 4-5: Oracle and period search
-        r = self._apply_oracle_and_find_period(a, modulus, num_states, total_steps, start_time, steps)
+        r = self._apply_oracle_and_find_period(a, modulus, num_states, total_steps, steps)
         
         if check_timeout(start_time):
             raise TimeoutError(TIMEOUT_ERROR_MESSAGE)
@@ -540,7 +540,7 @@ class ShorsAlgorithm:
         log_process("QUANTUM_GATE", "✅ Hadamard transformation complete - uniform superposition achieved", "INFO")
         return state
 
-    def _apply_oracle_and_find_period(self, a, modulus, num_states, total_steps, start_time, steps):
+    def _apply_oracle_and_find_period(self, a, modulus, num_states, total_steps, steps):
         """Apply modular exponentiation oracle and find period (Steps 4-5)."""
         self._log_step("ORACLE_INIT", 4, total_steps,
                       "🔮 Preparing modular exponentiation oracle U_a")
@@ -608,17 +608,23 @@ class ShorsAlgorithm:
             except Exception as fft_err:
                 error_str = str(fft_err)
                 log_process("GPU_FFT", f"⚠️ FFT attempt {fft_attempt + 1} failed: {error_str[:80]}", "WARNING")
-                if ("CUFFT" in error_str.upper() or "CUDA" in error_str.upper()) and self.use_gpu and fft_attempt < max_fft_retries - 1:
-                    try:
-                        cp.cuda.Stream.null.synchronize()
-                        cp.get_default_memory_pool().free_all_blocks()
-                        cp.get_default_pinned_memory_pool().free_all_blocks()
-                        time.sleep(0.5)
-                        log_process("GPU_FFT", "🔄 GPU memory freed, retrying FFT...", "INFO")
-                    except Exception:
-                        pass
-                    continue
-                break
+                if not self._handle_fft_retry(error_str, fft_attempt, max_fft_retries):
+                    break
+        return False
+
+    def _handle_fft_retry(self, error_str, fft_attempt, max_fft_retries):
+        """Handle FFT error and attempt GPU memory cleanup for retry. Returns True if should retry."""
+        is_cuda_error = "CUFFT" in error_str.upper() or "CUDA" in error_str.upper()
+        if is_cuda_error and self.use_gpu and fft_attempt < max_fft_retries - 1:
+            try:
+                cp.cuda.Stream.null.synchronize()
+                cp.get_default_memory_pool().free_all_blocks()
+                cp.get_default_pinned_memory_pool().free_all_blocks()
+                time.sleep(0.5)
+                log_process("GPU_FFT", "🔄 GPU memory freed, retrying FFT...", "INFO")
+            except Exception:
+                pass
+            return True
         return False
 
     def _cleanup_gpu_memory_for_fft(self, fft_attempt, max_fft_retries):
@@ -662,7 +668,7 @@ class ShorsAlgorithm:
         except Exception as cpu_err:
             log_process("GPU_FFT", f"❌ CPU FFT fallback also failed: {str(cpu_err)[:80]}", "ERROR")
             self._create_dummy_qft_state(num_states)
-            return True
+            return False
 
     def _free_gpu_memory_safe(self):
         """Safely free GPU memory pools."""
