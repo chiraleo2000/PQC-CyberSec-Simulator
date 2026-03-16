@@ -34,6 +34,16 @@ import java.util.concurrent.*;
 @Slf4j
 public class CuQuantumGpuSimulator {
 
+    private static final String GPU_INIT_CATEGORY = "GPU_INIT";
+    private static final String LOG_LEVEL_ERROR = "ERROR";
+    private static final String LOG_FORMAT_CATEGORY_MSG = "[{}] {}";
+    private static final String GPU_REQUIRED_MSG = "GPU is REQUIRED but not available - operation blocked!";
+    private static final String GPU_REQUIRED_ERROR = "GPU is REQUIRED for quantum simulation but no GPU detected!";
+    private static final String SHOR_TIMEOUT_CATEGORY = "SHOR_TIMEOUT";
+    private static final String TIMEOUT_MSG = "Operation timed out (1 hour limit exceeded)";
+    private static final String TIMEOUT_ERROR_MSG = "Operation timed out - exceeded 1 hour limit";
+    private static final String PQC_TIMEOUT_CATEGORY = "PQC_TIMEOUT";
+
     // Maximum decryption timeout (1 hour)
     public static final Duration MAX_DECRYPTION_TIMEOUT = Duration.ofHours(1);
     
@@ -55,7 +65,6 @@ public class CuQuantumGpuSimulator {
 
     // cuQuantum Simulation State
     private int numQubits = 0;
-    private double[] stateVectorReal;
     @SuppressWarnings("unused")
     private double[] stateVectorImag;
     private final SecureRandom random = new SecureRandom();
@@ -74,18 +83,18 @@ public class CuQuantumGpuSimulator {
     @PostConstruct
     public void initialize() {
         log.info("🚀 Initializing cuQuantum GPU Simulator v2.0 - GPU-ONLY MODE");
-        logProcess("GPU_INIT", "Starting GPU initialization - GPU is REQUIRED", "INFO");
+        logProcess(GPU_INIT_CATEGORY, "Starting GPU initialization - GPU is REQUIRED", "INFO");
         
         detectGpu();
         initializeThreadPool();
         
         if (gpuAvailable) {
             log.info("✅ cuQuantum GPU Simulator initialized - GPU: {} ({} MB VRAM)", gpuName, gpuMemoryMB);
-            logProcess("GPU_INIT", "GPU initialized successfully: " + gpuName, "INFO");
+            logProcess(GPU_INIT_CATEGORY, "GPU initialized successfully: " + gpuName, "INFO");
         } else {
             log.warn("⚠️ GPU NOT AVAILABLE - Running in DEGRADED MODE!");
             log.warn("⚠️ Install NVIDIA drivers for full GPU acceleration.");
-            logProcess("GPU_INIT", "GPU NOT AVAILABLE - Running in degraded mode!", "ERROR");
+            logProcess(GPU_INIT_CATEGORY, "GPU NOT AVAILABLE - Running in degraded mode!", LOG_LEVEL_ERROR);
         }
         
         log.info("⏱️ Decryption timeout limit: {} hour(s)", MAX_DECRYPTION_TIMEOUT.toHours());
@@ -111,9 +120,9 @@ public class CuQuantumGpuSimulator {
         
         // Also log to standard logger
         switch (level) {
-            case "ERROR" -> log.error("[{}] {}", category, message);
-            case "WARN" -> log.warn("[{}] {}", category, message);
-            default -> log.info("[{}] {}", category, message);
+            case LOG_LEVEL_ERROR -> log.error(LOG_FORMAT_CATEGORY_MSG, category, message);
+            case "WARN" -> log.warn(LOG_FORMAT_CATEGORY_MSG, category, message);
+            default -> log.info(LOG_FORMAT_CATEGORY_MSG, category, message);
         }
     }
     
@@ -157,6 +166,9 @@ public class CuQuantumGpuSimulator {
             gpuName = "CPU Fallback (No NVIDIA GPU)";
             gpuMemoryMB = Runtime.getRuntime().maxMemory() / (1024 * 1024);
             gpuAvailable = false;
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -214,10 +226,9 @@ public class CuQuantumGpuSimulator {
             log.info("🎮 GPU: Allocating {} amplitude state vector ({} MB)", 
                     stateSize, (stateSize * 16) / (1024 * 1024));
             // We'll track statistics but not allocate huge arrays in Java
-            stateVectorReal = null;
             stateVectorImag = null;
         } else {
-            stateVectorReal = new double[(int) stateSize];
+            double[] stateVectorReal = new double[(int) stateSize];
             stateVectorImag = new double[(int) stateSize];
             // Initialize to |0⟩ state
             stateVectorReal[0] = 1.0;
@@ -249,8 +260,8 @@ public class CuQuantumGpuSimulator {
      * Apply modular exponentiation oracle
      * U|x⟩|y⟩ = |x⟩|y ⊕ a^x mod N⟩
      */
-    public void applyModularExponentiation(BigInteger a, BigInteger N, int controlQubits) {
-        log.debug("🧮 Modular exponentiation: a={}, N={}, control_qubits={}", a, N, controlQubits);
+    public void applyModularExponentiation(BigInteger a, BigInteger modulus, int controlQubits) {
+        log.debug("🧮 Modular exponentiation: a={}, N={}, control_qubits={}", a, modulus, controlQubits);
     }
 
     /**
@@ -278,14 +289,14 @@ public class CuQuantumGpuSimulator {
      * @param keySize Key size in bits (e.g., 2048)
      * @return FactorizationResult with factors and timing
      */
-    public FactorizationResult runShorsAlgorithm(BigInteger N, int keySize) {
+    public FactorizationResult runShorsAlgorithm(BigInteger modulus, int keySize) {
         Instant operationStart = Instant.now();
         
         log.warn("⚛️ SHOR'S ALGORITHM: Attempting to factor {}-bit RSA modulus", keySize);
         logProcess("SHOR_START", String.format("Starting Shor's Algorithm on %d-bit RSA modulus", keySize), "INFO");
         
         FactorizationResult result = new FactorizationResult();
-        result.setModulus(N);
+        result.setModulus(modulus);
         result.setKeySize(keySize);
         result.setStartTime(System.currentTimeMillis());
         result.setGpuUsed(gpuName);
@@ -299,9 +310,9 @@ public class CuQuantumGpuSimulator {
         
         // Check GPU requirement
         if (gpuRequired && !gpuAvailable) {
-            logProcess("SHOR_ERROR", "GPU is REQUIRED but not available - operation blocked!", "ERROR");
+            logProcess("SHOR_ERROR", GPU_REQUIRED_MSG, LOG_LEVEL_ERROR);
             result.setSuccess(false);
-            result.setErrorMessage("GPU is REQUIRED for quantum simulation but no GPU detected!");
+            result.setErrorMessage(GPU_REQUIRED_ERROR);
             return result;
         }
 
@@ -314,9 +325,9 @@ public class CuQuantumGpuSimulator {
             
             // Check timeout
             if (hasTimedOut(operationStart)) {
-                logProcess("SHOR_TIMEOUT", "Operation timed out (1 hour limit exceeded)", "ERROR");
+                logProcess(SHOR_TIMEOUT_CATEGORY, TIMEOUT_MSG, LOG_LEVEL_ERROR);
                 result.setSuccess(false);
-                result.setErrorMessage("Operation timed out - exceeded 1 hour limit");
+                result.setErrorMessage(TIMEOUT_ERROR_MSG);
                 return result;
             }
             
@@ -330,26 +341,26 @@ public class CuQuantumGpuSimulator {
 
             // Check timeout
             if (hasTimedOut(operationStart)) {
-                logProcess("SHOR_TIMEOUT", "Operation timed out during Phase 1", "ERROR");
+                logProcess(SHOR_TIMEOUT_CATEGORY, "Operation timed out during Phase 1", LOG_LEVEL_ERROR);
                 result.setSuccess(false);
-                result.setErrorMessage("Operation timed out - exceeded 1 hour limit");
+                result.setErrorMessage(TIMEOUT_ERROR_MSG);
                 return result;
             }
 
             // Phase 2: Period finding via modular exponentiation
             logProcess("SHOR_PHASE2", "Phase 2: Modular exponentiation oracle", "INFO");
             log.info("🔄 Phase 2: Modular exponentiation oracle...");
-            BigInteger a = BigInteger.valueOf(2 + random.nextInt(Math.max(1, N.intValue() - 2)));
+            BigInteger a = BigInteger.valueOf(2L + random.nextInt(Math.max(1, modulus.intValue() - 2)));
             logProcess("SHOR_BASE", String.format("Selected random base a = %s", a.toString()), "INFO");
-            applyModularExponentiation(a, N, numQubits / 2);
+            applyModularExponentiation(a, modulus, numQubits / 2);
             simulateGpuComputation(200);
             logProcess("SHOR_MOD_EXP", "Modular exponentiation U|x⟩|y⟩ = |x⟩|y ⊕ a^x mod N⟩ complete", "INFO");
 
             // Check timeout
             if (hasTimedOut(operationStart)) {
-                logProcess("SHOR_TIMEOUT", "Operation timed out during Phase 2", "ERROR");
+                logProcess(SHOR_TIMEOUT_CATEGORY, "Operation timed out during Phase 2", LOG_LEVEL_ERROR);
                 result.setSuccess(false);
-                result.setErrorMessage("Operation timed out - exceeded 1 hour limit");
+                result.setErrorMessage(TIMEOUT_ERROR_MSG);
                 return result;
             }
 
@@ -362,9 +373,9 @@ public class CuQuantumGpuSimulator {
 
             // Check timeout
             if (hasTimedOut(operationStart)) {
-                logProcess("SHOR_TIMEOUT", "Operation timed out during Phase 3", "ERROR");
+                logProcess(SHOR_TIMEOUT_CATEGORY, "Operation timed out during Phase 3", LOG_LEVEL_ERROR);
                 result.setSuccess(false);
-                result.setErrorMessage("Operation timed out - exceeded 1 hour limit");
+                result.setErrorMessage(TIMEOUT_ERROR_MSG);
                 return result;
             }
 
@@ -381,10 +392,10 @@ public class CuQuantumGpuSimulator {
             
             // For demo: "Find" the factors using simulated quantum speedup
             BigInteger p = generateDemoPrimeFactor(keySize / 2);
-            BigInteger q = N.divide(p);
+            BigInteger q = modulus.divide(p);
             
             // Verify factorization (for demo, we adjust q)
-            if (!p.multiply(q).equals(N)) {
+            if (!p.multiply(q).equals(modulus)) {
                 p = new BigInteger(keySize / 2, 100, random);
                 q = new BigInteger(keySize / 2, 100, random);
             }
@@ -412,7 +423,7 @@ public class CuQuantumGpuSimulator {
 
         } catch (Exception e) {
             log.error("Shor's algorithm error", e);
-            logProcess("SHOR_ERROR", "Error during factorization: " + e.getMessage(), "ERROR");
+            logProcess("SHOR_ERROR", "Error during factorization: " + e.getMessage(), LOG_LEVEL_ERROR);
             result.setSuccess(false);
             result.setErrorMessage(e.getMessage());
         }
@@ -457,9 +468,9 @@ public class CuQuantumGpuSimulator {
 
         // Check GPU requirement
         if (gpuRequired && !gpuAvailable) {
-            logProcess("GROVER_ERROR", "GPU is REQUIRED but not available - operation blocked!", "ERROR");
+            logProcess("GROVER_ERROR", GPU_REQUIRED_MSG, LOG_LEVEL_ERROR);
             result.setVulnerable(false);
-            result.setMessage("GPU is REQUIRED for quantum simulation but no GPU detected!");
+            result.setMessage(GPU_REQUIRED_ERROR);
             return result;
         }
 
@@ -488,9 +499,9 @@ public class CuQuantumGpuSimulator {
         for (int i = 1; i <= iterationsToSimulate; i++) {
             // Check timeout
             if (hasTimedOut(operationStart)) {
-                logProcess("GROVER_TIMEOUT", "Operation timed out (1 hour limit exceeded)", "ERROR");
+                logProcess("GROVER_TIMEOUT", TIMEOUT_MSG, LOG_LEVEL_ERROR);
                 result.setVulnerable(false);
-                result.setMessage("Operation timed out - exceeded 1 hour limit");
+                result.setMessage(TIMEOUT_ERROR_MSG);
                 return result;
             }
             
@@ -560,9 +571,9 @@ public class CuQuantumGpuSimulator {
 
         // Check GPU requirement
         if (gpuRequired && !gpuAvailable) {
-            logProcess("PQC_ERROR", "GPU is REQUIRED but not available - operation blocked!", "ERROR");
+            logProcess("PQC_ERROR", GPU_REQUIRED_MSG, LOG_LEVEL_ERROR);
             result.setBroken(false);
-            result.setMessage("GPU is REQUIRED for quantum simulation but no GPU detected!");
+            result.setMessage(GPU_REQUIRED_ERROR);
             return result;
         }
 
@@ -591,9 +602,9 @@ public class CuQuantumGpuSimulator {
         
         // Check timeout
         if (hasTimedOut(operationStart)) {
-            logProcess("PQC_TIMEOUT", "Operation timed out (1 hour limit exceeded)", "ERROR");
+            logProcess(PQC_TIMEOUT_CATEGORY, TIMEOUT_MSG, LOG_LEVEL_ERROR);
             result.setBroken(false);
-            result.setMessage("Operation timed out - exceeded 1 hour limit");
+            result.setMessage(TIMEOUT_ERROR_MSG);
             return result;
         }
         
@@ -606,9 +617,9 @@ public class CuQuantumGpuSimulator {
         // Simulate BKZ progress (will NOT succeed against proper PQC)
         for (int tour = 1; tour <= 5; tour++) {
             if (hasTimedOut(operationStart)) {
-                logProcess("PQC_TIMEOUT", "Operation timed out during BKZ reduction", "ERROR");
+                logProcess(PQC_TIMEOUT_CATEGORY, "Operation timed out during BKZ reduction", LOG_LEVEL_ERROR);
                 result.setBroken(false);
-                result.setMessage("Operation timed out - exceeded 1 hour limit");
+                result.setMessage(TIMEOUT_ERROR_MSG);
                 return result;
             }
             logProcess("PQC_BKZ_TOUR", String.format("BKZ tour %d/∞: Shortest vector norm still too large", tour), "INFO");
@@ -625,9 +636,9 @@ public class CuQuantumGpuSimulator {
         
         // Check timeout
         if (hasTimedOut(operationStart)) {
-            logProcess("PQC_TIMEOUT", "Operation timed out during Grover search", "ERROR");
+            logProcess(PQC_TIMEOUT_CATEGORY, "Operation timed out during Grover search", LOG_LEVEL_ERROR);
             result.setBroken(false);
-            result.setMessage("Operation timed out - exceeded 1 hour limit");
+            result.setMessage(TIMEOUT_ERROR_MSG);
             return result;
         }
         
@@ -652,7 +663,7 @@ public class CuQuantumGpuSimulator {
                 "No known efficient quantum algorithm breaks lattice-based cryptography.",
                 algorithm, postQuantumSecurity));
 
-        logProcess("PQC_RESULT", String.format("ATTACK FAILED after %d ms", result.getExecutionTimeMs()), "ERROR");
+        logProcess("PQC_RESULT", String.format("ATTACK FAILED after %d ms", result.getExecutionTimeMs()), LOG_LEVEL_ERROR);
         logProcess("PQC_SECURE", String.format("%s maintains %d-bit post-quantum security", algorithm, postQuantumSecurity), "INFO");
         logProcess("PQC_EXPLANATION", "LWE/MLWE problems have no known efficient quantum solutions", "INFO");
         
@@ -673,7 +684,7 @@ public class CuQuantumGpuSimulator {
         try {
             // Add some randomness to make it realistic
             int jitter = random.nextInt(baseMs / 2);
-            Thread.sleep(baseMs + jitter);
+            Thread.sleep((long) baseMs + jitter);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -813,7 +824,7 @@ public class CuQuantumGpuSimulator {
      * Simulate lattice-based attack on ML-KEM/Kyber - returns LatticeAttackResult
      * Compatible with TransactionInterceptor.attackTransaction()
      */
-    public LatticeAttackResult simulateLatticeAttack(String algorithm, byte[] encryptedPayload) {
+    public LatticeAttackResult simulateLatticeAttack(String algorithm) {
         log.info("🛡️ LATTICE ATTACK: Attempting attack on {}...", algorithm);
         
         // Determine security level from algorithm name

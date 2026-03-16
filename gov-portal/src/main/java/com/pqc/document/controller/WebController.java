@@ -35,6 +35,10 @@ import java.util.UUID;
 @Slf4j
 public class WebController {
 
+    private static final String REDIRECT_DASHBOARD = "redirect:/dashboard";
+    private static final String REDIRECT_LOGIN = "redirect:/login";
+    private static final String ATTR_SUCCESS = "success";
+
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
     
@@ -68,7 +72,7 @@ public class WebController {
         // If already logged in, redirect to dashboard
         User user = getCurrentUser();
         if (user != null) {
-            return "redirect:/dashboard";
+            return REDIRECT_DASHBOARD;
         }
         // Pass OAuth2 enabled flag to template
         model.addAttribute("oauth2Enabled", oauth2Enabled);
@@ -78,7 +82,7 @@ public class WebController {
     @GetMapping("/logout")
     public String logout(HttpSession session) {
         session.invalidate();
-        return "redirect:/login";
+        return REDIRECT_LOGIN;
     }
 
     // ============ DASHBOARD ============
@@ -87,7 +91,7 @@ public class WebController {
     public String dashboard(Model model) {
         User user = getCurrentUser();
         if (user == null) {
-            return "redirect:/login";
+            return REDIRECT_LOGIN;
         }
 
         model.addAttribute("user", user);
@@ -111,7 +115,7 @@ public class WebController {
     public String carLicenseForm(Model model) {
         User user = getCurrentUser();
         if (user == null) {
-            return "redirect:/login";
+            return REDIRECT_LOGIN;
         }
         model.addAttribute("user", user);
         return "services/car-license";
@@ -132,7 +136,7 @@ public class WebController {
         
         User user = getCurrentUser();
         if (user == null) {
-            return "redirect:/login";
+            return REDIRECT_LOGIN;
         }
 
         // Determine encryption algorithm from user selection
@@ -189,12 +193,12 @@ public class WebController {
         log.info("📋 Car License Application submitted by {} [Encryption: {}, Signature: {}]", 
                 user.getUsername(), encryptionAlgorithm, signatureAlgorithm);
 
-        redirectAttributes.addFlashAttribute("success", 
+        redirectAttributes.addFlashAttribute(ATTR_SUCCESS, 
             "Car License Application submitted successfully! Document ID: " + doc.getDocumentId());
         redirectAttributes.addFlashAttribute("encryptionUsed", encryptionAlgorithm.getDisplayName());
         redirectAttributes.addFlashAttribute("signatureUsed", signatureAlgorithm.getDisplayName());
         
-        return "redirect:/dashboard";
+        return REDIRECT_DASHBOARD;
     }
 
     // ============ TAX FILING SERVICES ============
@@ -203,7 +207,7 @@ public class WebController {
     public String taxFilingForm(Model model) {
         User user = getCurrentUser();
         if (user == null) {
-            return "redirect:/login";
+            return REDIRECT_LOGIN;
         }
         model.addAttribute("user", user);
         return "services/tax-filing";
@@ -224,7 +228,7 @@ public class WebController {
         
         User user = getCurrentUser();
         if (user == null) {
-            return "redirect:/login";
+            return REDIRECT_LOGIN;
         }
 
         // Determine encryption algorithm from user selection
@@ -282,12 +286,12 @@ public class WebController {
         log.info("💰 Tax Filing submitted by {} for year {} [Encryption: {}, Signature: {}]", 
                 user.getUsername(), filingYear, encryptionAlgorithm, signatureAlgorithm);
 
-        redirectAttributes.addFlashAttribute("success", 
+        redirectAttributes.addFlashAttribute(ATTR_SUCCESS, 
             "Tax Filing submitted successfully! Document ID: " + doc.getDocumentId());
         redirectAttributes.addFlashAttribute("encryptionUsed", encryptionAlgorithm.getDisplayName());
         redirectAttributes.addFlashAttribute("signatureUsed", signatureAlgorithm.getDisplayName());
         
-        return "redirect:/dashboard";
+        return REDIRECT_DASHBOARD;
     }
 
     // ============ OFFICER ACTIONS ============
@@ -296,12 +300,12 @@ public class WebController {
     public String reviewDocument(@PathVariable String documentId, Model model) {
         User user = getCurrentUser();
         if (user == null || (user.getRole() != User.UserRole.OFFICER && user.getRole() != User.UserRole.ADMIN)) {
-            return "redirect:/login";
+            return REDIRECT_LOGIN;
         }
 
         Document doc = documentRepository.findByDocumentId(documentId).orElse(null);
         if (doc == null) {
-            return "redirect:/dashboard";
+            return REDIRECT_DASHBOARD;
         }
 
         model.addAttribute("user", user);
@@ -314,7 +318,7 @@ public class WebController {
                                    RedirectAttributes redirectAttributes) {
         User user = getCurrentUser();
         if (user == null || (user.getRole() != User.UserRole.OFFICER && user.getRole() != User.UserRole.ADMIN)) {
-            return "redirect:/login";
+            return REDIRECT_LOGIN;
         }
 
         Document doc = documentRepository.findByDocumentId(documentId).orElse(null);
@@ -325,10 +329,10 @@ public class WebController {
             documentRepository.save(doc);
             
             log.info("✅ Document {} APPROVED by Officer {}", documentId, user.getUsername());
-            redirectAttributes.addFlashAttribute("success", "Document " + documentId + " approved!");
+            redirectAttributes.addFlashAttribute(ATTR_SUCCESS, "Document " + documentId + " approved!");
         }
 
-        return "redirect:/dashboard";
+        return REDIRECT_DASHBOARD;
     }
 
     @PostMapping("/officer/reject/{documentId}")
@@ -337,7 +341,7 @@ public class WebController {
                                   RedirectAttributes redirectAttributes) {
         User user = getCurrentUser();
         if (user == null || (user.getRole() != User.UserRole.OFFICER && user.getRole() != User.UserRole.ADMIN)) {
-            return "redirect:/login";
+            return REDIRECT_LOGIN;
         }
 
         Document doc = documentRepository.findByDocumentId(documentId).orElse(null);
@@ -351,7 +355,7 @@ public class WebController {
             redirectAttributes.addFlashAttribute("error", "Document " + documentId + " rejected.");
         }
 
-        return "redirect:/dashboard";
+        return REDIRECT_DASHBOARD;
     }
 
     // ============ TRANSACTION LOG (For Hacker Monitoring) ============

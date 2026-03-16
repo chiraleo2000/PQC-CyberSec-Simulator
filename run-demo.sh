@@ -59,8 +59,8 @@ HACKER_PID=""
 QS_PID=""
 USE_DOCKER=false
 
-# Auto-shutdown timeout in seconds (5 minutes = 300 seconds)
-AUTO_SHUTDOWN_TIMEOUT=300
+# Auto-shutdown timeout in seconds (10 minutes = 600 seconds)
+AUTO_SHUTDOWN_TIMEOUT=600
 LAST_ACTIVITY_TIME=$(date +%s)
 
 # Function to clean GPU VRAM
@@ -186,7 +186,7 @@ if $MANUAL_MODE; then
 else
     echo -e "  MODE: ${BLUE}AUTOMATED TESTING${NC} - Selenium tests will run automatically"
 fi
-echo -e "  ${YELLOW}AUTO-CLEANUP: Services will auto-shutdown after 5 minutes of inactivity${NC}"
+echo -e "  ${YELLOW}AUTO-CLEANUP: Services will auto-shutdown after 10 minutes of inactivity${NC}"
 echo -e "  ${YELLOW}GPU CLEANUP: GPU VRAM will be released when services stop${NC}"
 echo "============================================================================================="
 echo ""
@@ -196,12 +196,17 @@ echo ""
 # ═══════════════════════════════════════════════════════════════════════════════
 echo -e "${BLUE}[1/6] Checking Prerequisites and Determining Infrastructure...${NC}"
 
-# Check Java
-if ! command -v java &> /dev/null; then
-    echo -e "${RED}   [ERROR] Java is not installed! Please install JDK 17+.${NC}"
+# --- JDK detection (require javac, not just java) ---
+if ! command -v javac &> /dev/null; then
+    echo -e "${RED}   [ERROR] javac not found! You are running a JRE, not a JDK.${NC}"
+    echo -e "${RED}   Please install JDK 21+ and set JAVA_HOME to the JDK directory.${NC}"
     exit 1
 fi
-echo -e "   ${GREEN}[OK] Java found${NC}"
+if ! command -v java &> /dev/null; then
+    echo -e "${RED}   [ERROR] Java is not installed! Please install JDK 21+.${NC}"
+    exit 1
+fi
+echo -e "   ${GREEN}[OK] JDK found ($(javac -version 2>&1))${NC}"
 
 # Check Maven
 if ! command -v mvn &> /dev/null; then
@@ -209,6 +214,28 @@ if ! command -v mvn &> /dev/null; then
     exit 1
 fi
 echo -e "   ${GREEN}[OK] Maven found${NC}"
+
+# --- GPU + VRAM check (6 GB minimum for GPU mode, CPU fallback if < 6 GB) ---
+GPU_OK=false
+GPU_VRAM_MB=0
+if command -v nvidia-smi &> /dev/null; then
+    GPU_LINE=$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
+    if [ -n "$GPU_LINE" ]; then
+        GPU_NAME=$(echo "$GPU_LINE" | cut -d',' -f1 | xargs)
+        GPU_VRAM_MB=$(echo "$GPU_LINE" | cut -d',' -f2 | xargs)
+        echo -e "   ${GREEN}[OK] GPU detected: $GPU_NAME ($GPU_VRAM_MB MB VRAM)${NC}"
+        if [ "$GPU_VRAM_MB" -ge 6144 ] 2>/dev/null; then
+            GPU_OK=true
+            echo -e "   ${GREEN}[OK] GPU VRAM sufficient ($GPU_VRAM_MB MB >= 6144 MB) - GPU mode enabled${NC}"
+        else
+            echo -e "   ${YELLOW}[WARN] GPU VRAM insufficient ($GPU_VRAM_MB MB < 6144 MB) - CPU fallback will be used${NC}"
+        fi
+    else
+        echo -e "   ${YELLOW}[WARN] nvidia-smi found but no GPU detected${NC}"
+    fi
+else
+    echo -e "   ${YELLOW}[WARN] No NVIDIA GPU detected - quantum simulator will run in limited mode${NC}"
+fi
 
 # Check Python for quantum simulator
 PYTHON_AVAILABLE=false
@@ -223,6 +250,36 @@ elif command -v python &> /dev/null; then
     PYTHON_CMD="python"
 else
     echo -e "   ${YELLOW}[WARN] Python not found - Quantum simulator will use simulation mode${NC}"
+fi
+
+# --- Python package auto-install for quantum simulator ---
+if $PYTHON_AVAILABLE; then
+    $PYTHON_CMD -c "import flask, flask_cors, numpy, scipy, sympy, requests" 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo -e "   ${CYAN}[INFO] Installing missing Python packages for Quantum Simulator...${NC}"
+        pip install -r "$SCRIPT_DIR/quantum-simulator/requirements.txt" --quiet 2>/dev/null \
+            || pip3 install -r "$SCRIPT_DIR/quantum-simulator/requirements.txt" --quiet 2>/dev/null \
+            || echo -e "   ${YELLOW}[WARN] Some Python packages failed to install${NC}"
+        echo -e "   ${GREEN}[OK] Python packages installed${NC}"
+    else
+        echo -e "   ${GREEN}[OK] Python packages verified${NC}"
+    fi
+fi
+
+# --- Maven libraries pre-build (ensure all modules are compiled/installed) ---
+CRYPTO_LIB_JAR="$HOME/.m2/repository/com/pqc/crypto-lib/1.0.0/crypto-lib-1.0.0.jar"
+if [ ! -f "$CRYPTO_LIB_JAR" ]; then
+    echo -e "   ${CYAN}[INFO] crypto-lib not found in local Maven repo - building all modules...${NC}"
+    cd "$SCRIPT_DIR"
+    mvn clean install -DskipTests -q
+    if [ $? -eq 0 ]; then
+        echo -e "   ${GREEN}[OK] All Maven modules built and installed${NC}"
+    else
+        echo -e "${RED}   [ERROR] Maven build failed! Check Java/Maven setup.${NC}"
+        exit 1
+    fi
+else
+    echo -e "   ${GREEN}[OK] Maven libraries already installed${NC}"
 fi
 
 # Clean up any existing processes and GPU memory before starting
@@ -537,7 +594,7 @@ echo "    - /tmp/gov-portal.log"
 echo "    - /tmp/hacker-console.log"
 echo "    - /tmp/quantum-simulator.log"
 echo ""
-echo -e "  ${YELLOW}AUTO-SHUTDOWN: Services will stop after 5 minutes of inactivity${NC}"
+echo -e "  ${YELLOW}AUTO-SHUTDOWN: Services will stop after 10 minutes of inactivity${NC}"
 echo -e "  ${YELLOW}GPU CLEANUP: GPU VRAM will be released on shutdown${NC}"
 echo "============================================================================================="
 echo ""
@@ -553,7 +610,7 @@ while true; do
     
     if [ $remaining -le 0 ]; then
         echo ""
-        echo -e "${YELLOW}[AUTO-SHUTDOWN] 5 minutes of inactivity - cleaning up resources...${NC}"
+        echo -e "${YELLOW}[AUTO-SHUTDOWN] 10 minutes of inactivity - cleaning up resources...${NC}"
         cleanup
     fi
     

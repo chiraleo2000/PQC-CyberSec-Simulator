@@ -161,6 +161,44 @@ services:
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
+  # ═══════════════════════════════════════════════════════════════
+  #  QUANTUM SIMULATOR: GPU-Accelerated Quantum Attack Service
+  # ═══════════════════════════════════════════════════════════════
+  #
+  #  Requires: NVIDIA Container Toolkit + GPU with >= 6 GB VRAM
+  #  Uses CUDA 13.x + CuPy + cuQuantum for real quantum simulation.
+  #  Falls back to CPU only when GPU VRAM < 6 GB.
+  #
+  #  API: http://localhost:8184
+  #
+  quantum-simulator:
+    build:
+      context: ./quantum-simulator
+      dockerfile: Dockerfile
+    container_name: pqc-quantum-simulator
+    ports:
+      - "8184:8184"
+    environment:
+      PYTHONUNBUFFERED: "1"
+      GPU_REQUIRED: "true"
+      FLASK_HOST: "0.0.0.0"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8184/api/quantum/status"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    networks:
+      - pqc-network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
 

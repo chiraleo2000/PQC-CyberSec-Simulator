@@ -39,6 +39,9 @@ public class AdminInitializer implements CommandLineRunner {
     @Value("${admin.fullname:System Administrator}")
     private String adminFullName;
 
+    @Value("${demo.citizen.password:Citizen@2024!}")
+    private String citizenPassword;
+
     @Override
     public void run(String... args) throws Exception {
         log.info("Checking for admin user...");
@@ -103,18 +106,18 @@ public class AdminInitializer implements CommandLineRunner {
 
         // Create citizens with specific names for demo
         if (!userRepository.existsByUsername("john.citizen")) {
-            createUser("john.citizen", "john.citizen@email.com", "Citizen@2024!",
+            createUser("john.citizen", "john.citizen@email.com", citizenPassword,
                     "John Smith", UserRole.CITIZEN);
         }
 
         if (!userRepository.existsByUsername("emily.chen")) {
-            createUser("emily.chen", "emily.chen@email.com", "Citizen@2024!",
+            createUser("emily.chen", "emily.chen@email.com", citizenPassword,
                     "Emily Chen", UserRole.CITIZEN);
         }
 
         // Legacy citizen account for backward compatibility
         if (!userRepository.existsByUsername("citizen")) {
-            createUser("citizen", "citizen@pqc-cybersec.local", "Citizen@2024!",
+            createUser("citizen", "citizen@pqc-cybersec.local", citizenPassword,
                     "Jane Citizen", UserRole.CITIZEN);
         }
 
@@ -165,9 +168,9 @@ public class AdminInitializer implements CommandLineRunner {
                 ║                                                                  ║
                 ║  Demo Accounts (for Web Login):                                  ║
                 ║  ─────────────────────────────────────────────────────────────── ║
-                ║  👑 Admin:      admin / Admin@PQC2024!                           ║
-                ║  👨‍💼 Officer:    officer / Officer@2024!                          ║
-                ║  👤 John:       john.citizen / Citizen@2024!                     ║
+                ║  \uD83D\uDC51 Admin:      admin / Admin@PQC2024!                           ║
+                ║  \uD83D\uDC68\u200D\uD83D\uDCBC Officer:    officer / Officer@2024!                          ║
+                ║  \uD83D\uDC64 John:       john.citizen / Citizen@2024!                     ║
                 ║  👤 Emily:      emily.chen / Citizen@2024!                       ║
                 ║                                                                  ║
                 ║  Available Services:                                             ║

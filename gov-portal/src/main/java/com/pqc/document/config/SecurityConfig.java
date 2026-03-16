@@ -50,6 +50,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private static final String LOGIN_PATH = "/login";
+    private static final String DASHBOARD_PATH = "/dashboard";
+    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_OFFICER = "OFFICER";
+
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
     private final OAuth2AuthenticationSuccessHandler oAuth2SuccessHandler;
@@ -65,7 +70,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints - Web UI
-                        .requestMatchers("/", "/login", "/logout", "/error").permitAll()
+                        .requestMatchers("/", LOGIN_PATH, "/logout", "/error").permitAll()
                         .requestMatchers("/css/**", "/js/**", "/images/**", "/webjars/**").permitAll()
                         
                         // Public endpoints - API
@@ -76,28 +81,28 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
                         // Admin only endpoints
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/users/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/**").hasRole(ROLE_ADMIN)
+                        .requestMatchers(HttpMethod.DELETE, "/api/users/**").hasRole(ROLE_ADMIN)
 
                         // Officer and Admin can approve
-                        .requestMatchers("/api/documents/*/approve").hasAnyRole("ADMIN", "OFFICER")
-                        .requestMatchers("/api/documents/*/reject").hasAnyRole("ADMIN", "OFFICER")
-                        .requestMatchers("/officer/**").hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers("/api/documents/*/approve").hasAnyRole(ROLE_ADMIN, ROLE_OFFICER)
+                        .requestMatchers("/api/documents/*/reject").hasAnyRole(ROLE_ADMIN, ROLE_OFFICER)
+                        .requestMatchers("/officer/**").hasAnyRole(ROLE_ADMIN, ROLE_OFFICER)
 
                         // Service pages need authentication
-                        .requestMatchers("/dashboard", "/services/**").authenticated()
+                        .requestMatchers(DASHBOARD_PATH, "/services/**").authenticated()
 
                         // Authenticated users for everything else
                         .anyRequest().authenticated())
                 .formLogin(form -> form
-                        .loginPage("/login")
-                        .loginProcessingUrl("/login")
-                        .defaultSuccessUrl("/dashboard", true)
-                        .failureUrl("/login?error=true")
+                        .loginPage(LOGIN_PATH)
+                        .loginProcessingUrl(LOGIN_PATH)
+                        .defaultSuccessUrl(DASHBOARD_PATH, true)
+                        .failureUrl(LOGIN_PATH + "?error=true")
                         .permitAll())
                 .logout(logout -> logout
                         .logoutUrl("/logout")
-                        .logoutSuccessUrl("/login?logout=true")
+                        .logoutSuccessUrl(LOGIN_PATH + "?logout=true")
                         .invalidateHttpSession(true)
                         .deleteCookies("JSESSIONID")
                         .permitAll())
@@ -107,10 +112,10 @@ public class SecurityConfig {
         // Configure OAuth 2.0 if enabled
         if (oauth2Enabled) {
             http.oauth2Login(oauth2 -> oauth2
-                    .loginPage("/login")
-                    .defaultSuccessUrl("/dashboard", true)
+                    .loginPage(LOGIN_PATH)
+                    .defaultSuccessUrl(DASHBOARD_PATH, true)
                     .successHandler(oAuth2SuccessHandler)
-                    .failureUrl("/login?error=oauth2_error")
+                    .failureUrl(LOGIN_PATH + "?error=oauth2_error")
             );
         }
 

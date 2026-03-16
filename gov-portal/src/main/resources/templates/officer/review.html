@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -60,7 +60,7 @@
             padding: 15px;
             border-radius: 8px;
         }
-        .info-item label {
+        .info-item .info-label {
             display: block;
             color: #666;
             font-size: 12px;
@@ -121,7 +121,7 @@
             transition: opacity 0.3s;
         }
         .btn:hover { opacity: 0.9; }
-        .btn-approve { background: #28a745; color: white; }
+        .btn-approve { background: #155d27; color: white; }
         .btn-reject { background: #dc3545; color: white; }
         .btn-back { background: #6c757d; color: white; }
 
@@ -157,23 +157,23 @@
             
             <div class="doc-info">
                 <div class="info-item">
-                    <label>Document ID</label>
+                    <span class="info-label">Document ID</span>
                     <div class="value" th:text="${document.documentId}">DOC-12345678</div>
                 </div>
                 <div class="info-item">
-                    <label>Document Type</label>
+                    <span class="info-label">Document Type</span>
                     <div class="value" th:text="${document.documentType.displayName}">License</div>
                 </div>
                 <div class="info-item">
-                    <label>Applicant</label>
+                    <span class="info-label">Applicant</span>
                     <div class="value" th:text="${document.applicant.fullName}">John Smith</div>
                 </div>
                 <div class="info-item">
-                    <label>Submitted</label>
+                    <span class="info-label">Submitted</span>
                     <div class="value" th:text="${#temporals.format(document.createdAt, 'MMM dd, yyyy HH:mm')}">Dec 30, 2024</div>
                 </div>
                 <div class="info-item">
-                    <label>Status</label>
+                    <span class="info-label">Status</span>
                     <div>
                         <span class="status-badge" 
                               th:classappend="'status-' + ${document.status}"
@@ -181,7 +181,7 @@
                     </div>
                 </div>
                 <div class="info-item">
-                    <label>Encryption</label>
+                    <span class="info-label">Encryption</span>
                     <div>
                         <span class="encryption-badge" 
                               th:classappend="'enc-' + ${document.signatureAlgorithm}"

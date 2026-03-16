@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -332,7 +332,7 @@
                     </p>
                     
                     <div class="encryption-options">
-                        <label class="encryption-option vulnerable" onclick="selectEncryption(this, 'RSA_2048')">
+                        <label class="encryption-option vulnerable" onclick="selectEncryption(this, 'RSA_2048')" onkeydown="if(event.key==='Enter'||event.key===' '){selectEncryption(this, 'RSA_2048');event.preventDefault();}" tabindex="0" role="radio">
                             <input type="radio" name="encryptionType" value="RSA_2048">
                             <div class="name">⚠️ RSA-2048 (Classical)</div>
                             <div class="description">
@@ -341,7 +341,7 @@
                             </div>
                         </label>
                         
-                        <label class="encryption-option secure selected" onclick="selectEncryption(this, 'ML_KEM')">
+                        <label class="encryption-option secure selected" onclick="selectEncryption(this, 'ML_KEM')" onkeydown="if(event.key==='Enter'||event.key===' '){selectEncryption(this, 'ML_KEM');event.preventDefault();}" tabindex="0" role="radio">
                             <input type="radio" name="encryptionType" value="ML_KEM" checked>
                             <div class="name">✅ ML-KEM (Quantum-Safe)</div>
                             <div class="description">
@@ -366,7 +366,7 @@
                     </p>
                     
                     <div class="encryption-options">
-                        <label class="encryption-option vulnerable" onclick="selectSignature(this, 'RSA_2048')">
+                        <label class="encryption-option vulnerable" onclick="selectSignature(this, 'RSA_2048')" onkeydown="if(event.key==='Enter'||event.key===' '){selectSignature(this, 'RSA_2048');event.preventDefault();}" tabindex="0" role="radio">
                             <input type="radio" name="signatureType" value="RSA_2048">
                             <div class="name">⚠️ RSA-2048 (Classical)</div>
                             <div class="description">
@@ -374,7 +374,7 @@
                             </div>
                         </label>
                         
-                        <label class="encryption-option secure selected" onclick="selectSignature(this, 'ML_DSA')">
+                        <label class="encryption-option secure selected" onclick="selectSignature(this, 'ML_DSA')" onkeydown="if(event.key==='Enter'||event.key===' '){selectSignature(this, 'ML_DSA');event.preventDefault();}" tabindex="0" role="radio">
                             <input type="radio" name="signatureType" value="ML_DSA" checked>
                             <div class="name">✅ ML-DSA (Dilithium)</div>
                             <div class="description">
@@ -430,8 +430,8 @@
         }
 
         function calculateTax() {
-            const income = parseFloat(document.getElementById('grossIncome').value) || 0;
-            const deductions = parseFloat(document.getElementById('deductions').value) || 0;
+            const income = Number.parseFloat(document.getElementById('grossIncome').value) || 0;
+            const deductions = Number.parseFloat(document.getElementById('deductions').value) || 0;
             const taxable = Math.max(0, income - deductions);
             const tax = taxable * 0.23; // 23% tax rate
 
@@ -448,7 +448,7 @@
 
         // Format SSN input
         document.getElementById('taxId').addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
+            let value = e.target.value.replaceAll(/\D/g, '');
             if (value.length > 3 && value.length <= 5) {
                 value = value.slice(0,3) + '-' + value.slice(3);
             } else if (value.length > 5) {

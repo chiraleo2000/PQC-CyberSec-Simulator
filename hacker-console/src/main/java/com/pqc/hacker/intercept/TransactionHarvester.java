@@ -34,6 +34,11 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class TransactionHarvester {
 
+    private static final String ML_KEM_UNDERSCORE = "ML_KEM";
+    private static final String ML_KEM_HYPHEN = "ML-KEM";
+    private static final String ML_DSA_UNDERSCORE = "ML_DSA";
+    private static final String ML_DSA_HYPHEN = "ML-DSA";
+
     private final CuQuantumGpuSimulator quantumSimulator;
     private final HarvestedDataRepository harvestedDataRepository;
     private final OkHttpClient httpClient;
@@ -172,24 +177,14 @@ public class TransactionHarvester {
             // Attack ENCRYPTION (KEM) algorithm
             AttackResult encryptionAttack = attackEncryption(tx);
             results.add(encryptionAttack);
-            
-            if (encryptionAttack.isDecrypted()) {
-                rsaEncryptionBroken++;
-            } else if (encryptionAttack.getAlgorithm().contains("ML_KEM") || 
-                       encryptionAttack.getAlgorithm().contains("ML-KEM")) {
-                pqcEncryptionProtected++;
-            }
+            rsaEncryptionBroken += encryptionAttack.isDecrypted() ? 1 : 0;
+            pqcEncryptionProtected += isPqcEncryptionProtected(encryptionAttack) ? 1 : 0;
             
             // Attack SIGNATURE (DSA) algorithm
             AttackResult signatureAttack = attackSignature(tx);
             results.add(signatureAttack);
-            
-            if (signatureAttack.isForged()) {
-                rsaSignatureForged++;
-            } else if (signatureAttack.getAlgorithm().contains("ML_DSA") || 
-                       signatureAttack.getAlgorithm().contains("ML-DSA")) {
-                pqcSignatureProtected++;
-            }
+            rsaSignatureForged += signatureAttack.isForged() ? 1 : 0;
+            pqcSignatureProtected += isPqcSignatureProtected(signatureAttack) ? 1 : 0;
         }
         
         report.setAttackResults(results);
@@ -200,6 +195,28 @@ public class TransactionHarvester {
         
         // Generate attack summary
         int totalBroken = rsaEncryptionBroken + rsaSignatureForged;
+        generateAttackSummary(report, totalBroken, rsaEncryptionBroken, rsaSignatureForged,
+                pqcEncryptionProtected, pqcSignatureProtected);
+        
+        log.warn("📊 ATTACK COMPLETE: {} RSA encryptions broken, {} RSA signatures forged, {} PQC protected", 
+                rsaEncryptionBroken, rsaSignatureForged, pqcEncryptionProtected + pqcSignatureProtected);
+        
+        return report;
+    }
+
+    private boolean isPqcEncryptionProtected(AttackResult attack) {
+        return !attack.isDecrypted() && (attack.getAlgorithm().contains(ML_KEM_UNDERSCORE)
+                || attack.getAlgorithm().contains(ML_KEM_HYPHEN));
+    }
+
+    private boolean isPqcSignatureProtected(AttackResult attack) {
+        return !attack.isForged() && (attack.getAlgorithm().contains(ML_DSA_UNDERSCORE)
+                || attack.getAlgorithm().contains(ML_DSA_HYPHEN));
+    }
+
+    private void generateAttackSummary(QuantumAttackReport report, int totalBroken,
+            int rsaEncryptionBroken, int rsaSignatureForged,
+            int pqcEncryptionProtected, int pqcSignatureProtected) {
         if (totalBroken > 0) {
             StringBuilder sb = new StringBuilder("⚠️ CRITICAL: ");
             if (rsaEncryptionBroken > 0) {
@@ -217,11 +234,6 @@ public class TransactionHarvester {
             report.setOverallResult("⏳ PENDING: Insufficient quantum resources for attack");
             report.setSeverity("UNKNOWN");
         }
-        
-        log.warn("📊 ATTACK COMPLETE: {} RSA encryptions broken, {} RSA signatures forged, {} PQC protected", 
-                rsaEncryptionBroken, rsaSignatureForged, pqcEncryptionProtected + pqcSignatureProtected);
-        
-        return report;
     }
 
     /**
@@ -260,10 +272,10 @@ public class TransactionHarvester {
                         "Step 3: Document for " + tx.getApplicant() + " (" + tx.getDocumentType() + ") DECRYPTED!");
             }
             
-        } else if (algo.contains("ML_KEM") || algo.contains("ML-KEM") || algo.contains("KYBER")) {
+        } else if (algo.contains(ML_KEM_UNDERSCORE) || algo.contains(ML_KEM_HYPHEN) || algo.contains("KYBER")) {
             // ML-KEM (Kyber) is quantum-resistant - AES-256 key remains protected
             CuQuantumGpuSimulator.LatticeAttackResult latticeResult = 
-                    quantumSimulator.simulateLatticeAttack(algo, tx.getEncryptedPayload());
+                    quantumSimulator.simulateLatticeAttack(algo);
             
             result.setDecrypted(false);
             result.setForged(false);
@@ -334,7 +346,7 @@ public class TransactionHarvester {
                         " with VALID signature! Identity theft possible!");
             }
             
-        } else if (algo.contains("ML_DSA") || algo.contains("ML-DSA") || algo.contains("DILITHIUM")) {
+        } else if (algo.contains(ML_DSA_UNDERSCORE) || algo.contains(ML_DSA_HYPHEN) || algo.contains("DILITHIUM")) {
             // ML-DSA (Dilithium) signatures are quantum-resistant - forgery FAILS
             result.setDecrypted(false);
             result.setForged(false);
@@ -380,7 +392,7 @@ public class TransactionHarvester {
      */
     private byte[] generateSimulatedEncryptedData(String algorithm) {
         // Generate realistic-looking encrypted data
-        int size = algorithm.contains("ML-KEM") ? 1088 : 256;  // ML-KEM has larger ciphertexts
+        int size = algorithm.contains(ML_KEM_HYPHEN) ? 1088 : 256;  // ML-KEM has larger ciphertexts
         byte[] data = new byte[size];
         secureRandom.nextBytes(data);
         return data;
@@ -392,7 +404,7 @@ public class TransactionHarvester {
     private byte[] generateSimulatedSignatureData(String algorithm) {
         // Generate realistic-looking signature data
         // ML-DSA-65 (Dilithium) signatures are ~3293 bytes, RSA-2048 is 256 bytes
-        int size = algorithm.contains("ML_DSA") || algorithm.contains("ML-DSA") ? 3293 : 256;
+        int size = algorithm.contains(ML_DSA_UNDERSCORE) || algorithm.contains(ML_DSA_HYPHEN) ? 3293 : 256;
         byte[] data = new byte[size];
         secureRandom.nextBytes(data);
         return data;
@@ -415,12 +427,12 @@ public class TransactionHarvester {
             meta.setQuantumVulnerable(true);
             meta.setEstimatedQubits(8195);
             meta.setEstimatedAttackTime("~32 hours (future quantum computer)");
-        } else if (algorithm.contains("ML-KEM")) {
+        } else if (algorithm.contains(ML_KEM_HYPHEN)) {
             meta.setKeySize(768);  // ML-KEM-768
             meta.setQuantumVulnerable(false);
             meta.setEstimatedQubits(0);
             meta.setEstimatedAttackTime("Infeasible (quantum-resistant)");
-        } else if (algorithm.contains("ML-DSA")) {
+        } else if (algorithm.contains(ML_DSA_HYPHEN)) {
             meta.setKeySize(2048);
             meta.setQuantumVulnerable(false);
             meta.setEstimatedQubits(0);
@@ -471,8 +483,8 @@ public class TransactionHarvester {
             
             // Determine crypto algorithm enum
             CryptoAlgorithm algorithm = determineAlgorithm(itx.getEncryptionAlgorithm());
-            boolean isQuantumResistant = itx.getEncryptionAlgorithm().contains("ML_KEM") || 
-                                         itx.getEncryptionAlgorithm().contains("ML-KEM");
+            boolean isQuantumResistant = itx.getEncryptionAlgorithm().contains(ML_KEM_UNDERSCORE) || 
+                                         itx.getEncryptionAlgorithm().contains(ML_KEM_HYPHEN);
             
             HarvestedData harvested = HarvestedData.builder()
                     .harvestId(harvestId)
@@ -505,9 +517,9 @@ public class TransactionHarvester {
         if (algoString == null) return CryptoAlgorithm.RSA_2048;
         
         String upper = algoString.toUpperCase();
-        if (upper.contains("ML_KEM") || upper.contains("ML-KEM") || upper.contains("KYBER")) {
+        if (upper.contains(ML_KEM_UNDERSCORE) || upper.contains(ML_KEM_HYPHEN) || upper.contains("KYBER")) {
             return CryptoAlgorithm.ML_KEM;
-        } else if (upper.contains("ML_DSA") || upper.contains("ML-DSA") || upper.contains("DILITHIUM")) {
+        } else if (upper.contains(ML_DSA_UNDERSCORE) || upper.contains(ML_DSA_HYPHEN) || upper.contains("DILITHIUM")) {
             return CryptoAlgorithm.ML_DSA;
         } else if (upper.contains("AES-256") || upper.contains("AES_256")) {
             return CryptoAlgorithm.AES_256;

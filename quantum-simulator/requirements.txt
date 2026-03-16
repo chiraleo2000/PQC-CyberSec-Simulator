@@ -2,20 +2,23 @@
 # PQC-CyberSec-Simulator Quantum Service Dependencies
 # =============================================================================
 # 
-# This service uses NVIDIA GPU for quantum simulation via CuPy.
-# Requires: NVIDIA GPU with CUDA 12.x support (RTX 4060 recommended)
+# This service uses NVIDIA GPU for quantum simulation via CuPy + cuQuantum.
+# Requires: NVIDIA GPU with CUDA 13.x support and >= 6 GB VRAM
 #
 # For GPU acceleration (recommended):
 #   pip install -r requirements.txt
 #
-# For CPU-only fallback:
+# For CPU-only fallback (only when GPU VRAM < 6 GB):
 #   pip install flask flask-cors numpy scipy sympy requests
 #
+# Works on: Windows (direct), Linux/Mac (direct), Docker (--gpus all)
 # =============================================================================
 
-# GPU Acceleration (NVIDIA CUDA 12.x)
-# This provides GPU-accelerated array operations for quantum state simulation
-cupy-cuda12x>=13.3.0
+# GPU Acceleration (NVIDIA CUDA 13.x)
+# CuPy: GPU-accelerated array operations for quantum state simulation
+cupy-cuda13x>=13.4.0
+# cuQuantum: NVIDIA SDK for quantum circuit simulation on GPU
+cuquantum-python-cu13>=24.11.0
 
 # Web service framework
 flask>=3.0.0
@@ -29,10 +32,3 @@ scipy>=1.12.0
 sympy>=1.12
 
 # HTTP client for inter-service communication
-requests>=2.31.0
-
-# Optional: For profiling and monitoring
-# nvidia-ml-py>=12.535.133  # For GPU memory monitoring
-
-# HTTP client
-requests>=2.31.0

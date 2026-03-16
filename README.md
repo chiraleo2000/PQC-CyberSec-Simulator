@@ -131,10 +131,10 @@ mvn clean install -DskipTests
 
 That's it! The demo will automatically:
 - ✅ Start all required services (Quantum Simulator, Gov-Portal, Hacker Console)
-- ✅ Open 4 browser panels in 2×2 grid
-- ✅ Execute all 4 cryptographic scenarios
+- ✅ Execute all 4 cryptographic scenarios first (automated Selenium)
+- ✅ Open browser panels for manual interaction after tests
 - ✅ Show real-time quantum attacks
-- ✅ Auto-cleanup after completion
+- ✅ Keep services running so you can interact, re-test, and inspect logs
 
 **⏱️ Total time:** 6-8 minutes (fully automated, zero interaction)
 
@@ -232,13 +232,13 @@ The easiest way to run the complete demo is with our **fully automated script** 
 2. ✅ Starts Quantum Simulator (GPU-accelerated)
 3. ✅ Starts Government Portal (port 8181)
 4. ✅ Starts Hacker Console (port 8183)
-5. ✅ Opens 4 browser panels in 2x2 grid:
+5. ✅ Runs automated Selenium test demonstrating all 4 crypto scenarios
+6. ✅ Opens 4 browser panels in 2x2 grid for manual interaction:
    - **TOP-LEFT**: Citizen Portal
    - **TOP-RIGHT**: Officer Portal
    - **BOTTOM-LEFT**: Hacker Harvest Dashboard
    - **BOTTOM-RIGHT**: Hacker Decrypt Panel
-6. ✅ Runs automated Selenium test demonstrating all 4 crypto scenarios
-7. ✅ Auto-cleanup after 2-minute inspection window
+7. ✅ Keeps services running so you can continue interacting manually
 
 **⏱️ Total Duration:** ~6-8 minutes (fully automated)  
 **🎯 User Action Required:** NONE - Just watch!

@@ -35,6 +35,15 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class HackerSimulationController {
 
+        private static final String KEY_SUCCESS = "success";
+        private static final String KEY_DESCRIPTION = "description";
+        private static final String KEY_TARGET_ALGORITHM = "targetAlgorithm";
+        private static final String KEY_QUANTUM_ATTACK = "quantumAttack";
+        private static final String KEY_EDUCATION = "education";
+        private static final String KEY_EVENT = "event";
+        private static final String KEY_RECOMMENDATION = "recommendation";
+        private static final String KEY_MESSAGE = "message";
+
         private final InterceptionService interceptionService;
         private final QuantumAttackService quantumAttackService;
         private final QuantumProviderService quantumProviderService;
@@ -115,7 +124,7 @@ public class HackerSimulationController {
                         "newTransactions", result.getInterceptedTransactions() != null 
                                 ? result.getInterceptedTransactions() 
                                 : List.of(),
-                        "success", result.isSuccess(),
+                        KEY_SUCCESS, result.isSuccess(),
                         "timestamp", java.time.LocalDateTime.now()
                 ));
         }
@@ -246,41 +255,41 @@ public class HackerSimulationController {
                                 Map.of(
                                                 "id", "HNDL_RSA",
                                                 "name", "Harvest Now, Decrypt Later (RSA)",
-                                                "description",
+                                                KEY_DESCRIPTION,
                                                 "Demonstrates capturing RSA-encrypted data and decrypting with Shor's algorithm",
-                                                "targetAlgorithm", "RSA-2048",
-                                                "quantumAttack", "Shor's Algorithm",
+                                                KEY_TARGET_ALGORITHM, "RSA-2048",
+                                                KEY_QUANTUM_ATTACK, "Shor's Algorithm",
                                                 "classicalBreakTime", "300+ trillion years",
                                                 "quantumBreakTime", "~8 hours",
-                                                "education",
+                                                KEY_EDUCATION,
                                                 "Shows why RSA must be replaced before quantum computers mature"),
                                 Map.of(
                                                 "id", "HNDL_AES",
                                                 "name", "Grover's Attack on AES",
-                                                "description",
+                                                KEY_DESCRIPTION,
                                                 "Demonstrates Grover's algorithm reducing AES security by half",
-                                                "targetAlgorithm", "AES-128/256",
-                                                "quantumAttack", "Grover's Algorithm",
+                                                KEY_TARGET_ALGORITHM, "AES-128/256",
+                                                KEY_QUANTUM_ATTACK, "Grover's Algorithm",
                                                 "securityReduction", "AES-128: 128→64 bits, AES-256: 256→128 bits",
-                                                "education",
+                                                KEY_EDUCATION,
                                                 "Shows quadratic speedup but AES-256 remains practically secure"),
                                 Map.of(
                                                 "id", "PQC_PROTECTION",
                                                 "name", "Post-Quantum Protection",
-                                                "description",
+                                                KEY_DESCRIPTION,
                                                 "Demonstrates how ML-KEM and ML-DSA resist quantum attacks",
-                                                "targetAlgorithm", "ML-DSA, ML-KEM",
-                                                "quantumAttack", "NONE EFFECTIVE",
+                                                KEY_TARGET_ALGORITHM, "ML-DSA, ML-KEM",
+                                                KEY_QUANTUM_ATTACK, "NONE EFFECTIVE",
                                                 "protection", "Complete immunity to Shor's and Grover's algorithms",
-                                                "education",
+                                                KEY_EDUCATION,
                                                 "Shows the importance of migrating to NIST PQC standards NOW"),
                                 Map.of(
                                                 "id", "TIMING_ATTACK",
                                                 "name", "Timing Side-Channel Attack",
-                                                "description", "Demonstrates timing analysis to extract secrets",
-                                                "targetAlgorithm", "Any with timing leaks",
+                                                KEY_DESCRIPTION, "Demonstrates timing analysis to extract secrets",
+                                                KEY_TARGET_ALGORITHM, "Any with timing leaks",
                                                 "classicalAttack", "Statistical timing analysis",
-                                                "education", "Shows importance of constant-time implementations")));
+                                                KEY_EDUCATION, "Shows importance of constant-time implementations")));
         }
 
         /**
@@ -292,19 +301,19 @@ public class HackerSimulationController {
                 return ResponseEntity.ok(Map.of(
                                 "currentYear", 2024,
                                 "milestones", List.of(
-                                                Map.of("year", 2024, "event", "IBM Condor: 1,121 qubits available"),
-                                                Map.of("year", 2025, "event", "Expected: 5,000 qubit systems"),
-                                                Map.of("year", 2027, "event",
+                                                Map.of("year", 2024, KEY_EVENT, "IBM Condor: 1,121 qubits available"),
+                                                Map.of("year", 2025, KEY_EVENT, "Expected: 5,000 qubit systems"),
+                                                Map.of("year", 2027, KEY_EVENT,
                                                                 "Projected: Error-corrected logical qubits"),
-                                                Map.of("year", 2030, "event",
+                                                Map.of("year", 2030, KEY_EVENT,
                                                                 "Projected: Cryptographically relevant QC"),
-                                                Map.of("year", 2035, "event",
+                                                Map.of("year", 2035, KEY_EVENT,
                                                                 "Projected: Widespread quantum advantage")),
                                 "rsaBreakEstimate", Map.of(
                                                 "qubitsNeeded", 4000,
                                                 "estimatedYear", "2030-2035",
-                                                "recommendation", "Migrate to ML-KEM NOW"),
-                                "recommendation", "All sensitive data encrypted today with RSA/classical methods " +
+                                                KEY_RECOMMENDATION, "Migrate to ML-KEM NOW"),
+                                KEY_RECOMMENDATION, "All sensitive data encrypted today with RSA/classical methods " +
                                                 "should be considered compromised by 2035. Migrate to PQC immediately."));
         }
 
@@ -336,7 +345,7 @@ public class HackerSimulationController {
                         "gpuMemoryUsedMB", cuQuantumSimulator.getGpuMemoryUsedMB(),
                         "computeCapability", cuQuantumSimulator.getComputeCapability(),
                         "timeoutLimitHours", 1,
-                        "message", cuQuantumSimulator.isGpuAvailable() 
+                        KEY_MESSAGE, cuQuantumSimulator.isGpuAvailable() 
                                 ? "✅ GPU is available and ready for quantum simulation"
                                 : "⚠️ GPU NOT AVAILABLE - Running in degraded mode!"
                 ));
@@ -368,7 +377,7 @@ public class HackerSimulationController {
         public ResponseEntity<?> clearQuantumLogs() {
                 log.info("🗑️ Clearing quantum process logs");
                 cuQuantumSimulator.getProcessLogs().clear();
-                return ResponseEntity.ok(Map.of("cleared", true, "message", "Process logs cleared"));
+                return ResponseEntity.ok(Map.of("cleared", true, KEY_MESSAGE, "Process logs cleared"));
         }
 
         /**
@@ -386,7 +395,7 @@ public class HackerSimulationController {
                 return ResponseEntity.ok(Map.of(
                         "harvest", result,
                         "gpu", cuQuantumSimulator.getGpuInfo(),
-                        "message", result.isSuccess() 
+                        KEY_MESSAGE, result.isSuccess() 
                                 ? "✅ " + result.getTransactionCount() + " encrypted transactions harvested!" 
                                 : "❌ Harvest failed: " + result.getMessage()
                 ));
@@ -431,7 +440,7 @@ public class HackerSimulationController {
                         return ResponseEntity.ok(Map.of(
                                 "phase1_harvest", harvestResult,
                                 "phase2_attack", "SKIPPED - No data harvested",
-                                "success", false
+                                KEY_SUCCESS, false
                         ));
                 }
                 
@@ -440,7 +449,7 @@ public class HackerSimulationController {
                 
                 return ResponseEntity.ok(Map.of(
                         "phase1_harvest", Map.of(
-                                "success", true,
+                                KEY_SUCCESS, true,
                                 "transactionsIntercepted", harvestResult.getTransactionCount(),
                                 "rawData", harvestResult.getRawDataCaptured()
                         ),
@@ -454,7 +463,7 @@ public class HackerSimulationController {
                         "summary", Map.of(
                                 "severity", attackReport.getSeverity(),
                                 "result", attackReport.getOverallResult(),
-                                "recommendation", attackReport.getRsaKeysBroken() > 0 
+                                KEY_RECOMMENDATION, attackReport.getRsaKeysBroken() > 0 
                                         ? "⚠️ RSA encryption is VULNERABLE! Migrate to ML-KEM immediately!"
                                         : "✅ All data protected with Post-Quantum Cryptography"
                         )
@@ -480,7 +489,7 @@ public class HackerSimulationController {
         public ResponseEntity<?> clearHarvest() {
                 transactionHarvester.clearHarvestedData();
                 return ResponseEntity.ok(Map.of(
-                        "message", "Harvested data cleared",
+                        KEY_MESSAGE, "Harvested data cleared",
                         "count", 0
                 ));
         }

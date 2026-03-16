@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -246,7 +246,7 @@
                     </p>
                     
                     <div class="encryption-options">
-                        <label class="encryption-option vulnerable" onclick="selectEncryption(this, 'RSA_2048')">
+                        <label class="encryption-option vulnerable" onclick="selectEncryption(this, 'RSA_2048')" onkeydown="if(event.key==='Enter'||event.key===' '){selectEncryption(this, 'RSA_2048');event.preventDefault();}" tabindex="0" role="radio">
                             <input type="radio" name="encryptionType" value="RSA_2048" checked>
                             <div class="name">⚠️ RSA-2048 (Classical)</div>
                             <div class="description">
@@ -255,7 +255,7 @@
                             </div>
                         </label>
                         
-                        <label class="encryption-option secure" onclick="selectEncryption(this, 'ML_KEM')">
+                        <label class="encryption-option secure" onclick="selectEncryption(this, 'ML_KEM')" onkeydown="if(event.key==='Enter'||event.key===' '){selectEncryption(this, 'ML_KEM');event.preventDefault();}" tabindex="0" role="radio">
                             <input type="radio" name="encryptionType" value="ML_KEM">
                             <div class="name">✅ ML-KEM (Quantum-Safe)</div>
                             <div class="description">
@@ -279,7 +279,7 @@
                     </p>
                     
                     <div class="encryption-options">
-                        <label class="encryption-option vulnerable" onclick="selectSignature(this, 'RSA_2048')">
+                        <label class="encryption-option vulnerable" onclick="selectSignature(this, 'RSA_2048')" onkeydown="if(event.key==='Enter'||event.key===' '){selectSignature(this, 'RSA_2048');event.preventDefault();}" tabindex="0" role="radio">
                             <input type="radio" name="signatureType" value="RSA_2048" checked>
                             <div class="name">⚠️ RSA-2048 (Classical)</div>
                             <div class="description">
@@ -287,7 +287,7 @@
                             </div>
                         </label>
                         
-                        <label class="encryption-option secure" onclick="selectSignature(this, 'ML_DSA')">
+                        <label class="encryption-option secure" onclick="selectSignature(this, 'ML_DSA')" onkeydown="if(event.key==='Enter'||event.key===' '){selectSignature(this, 'ML_DSA');event.preventDefault();}" tabindex="0" role="radio">
                             <input type="radio" name="signatureType" value="ML_DSA">
                             <div class="name">✅ ML-DSA (Dilithium)</div>
                             <div class="description">

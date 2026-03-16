@@ -33,6 +33,9 @@ import java.util.Map;
 @Slf4j
 public class PythonQuantumClient {
     
+    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String APPLICATION_JSON = "application/json";
+
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final String quantumServiceUrl;
@@ -68,6 +71,9 @@ public class PythonQuantumClient {
             log.warn("⚠️ Python cuQuantum service not available at {}. Using Java simulation fallback.", 
                     quantumServiceUrl);
             serviceAvailable = false;
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
     
@@ -95,6 +101,9 @@ public class PythonQuantumClient {
             
         } catch (Exception e) {
             log.error("Error getting quantum status: {}", e.getMessage());
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             return createFallbackStatus();
         }
     }
@@ -123,7 +132,7 @@ public class PythonQuantumClient {
             
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(quantumServiceUrl + "/api/quantum/shor"))
-                    .header("Content-Type", "application/json")
+                    .header(CONTENT_TYPE, APPLICATION_JSON)
                     .timeout(Duration.ofSeconds(60))
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
@@ -138,6 +147,9 @@ public class PythonQuantumClient {
             
         } catch (Exception e) {
             log.error("Error running Shor's algorithm: {}", e.getMessage());
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             return createFallbackShorsResponse(modulus, keyBits);
         }
     }
@@ -174,7 +186,7 @@ public class PythonQuantumClient {
             
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(quantumServiceUrl + "/api/quantum/grover"))
-                    .header("Content-Type", "application/json")
+                    .header(CONTENT_TYPE, APPLICATION_JSON)
                     .timeout(Duration.ofSeconds(60))
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
@@ -186,7 +198,10 @@ public class PythonQuantumClient {
             
         } catch (Exception e) {
             log.error("Error running Grover's algorithm: {}", e.getMessage());
-            return createFallbackGroversResponse(keyBits);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            return createFallbackGroversResponse(0);
         }
     }
     
@@ -213,7 +228,7 @@ public class PythonQuantumClient {
             
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(quantumServiceUrl + "/api/quantum/attack/rsa"))
-                    .header("Content-Type", "application/json")
+                    .header(CONTENT_TYPE, APPLICATION_JSON)
                     .timeout(Duration.ofSeconds(60))
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
@@ -225,6 +240,9 @@ public class PythonQuantumClient {
             
         } catch (Exception e) {
             log.error("Error attacking RSA: {}", e.getMessage());
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             return createFallbackRsaAttackResponse(keySize);
         }
     }
@@ -253,7 +271,7 @@ public class PythonQuantumClient {
             
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(quantumServiceUrl + "/api/quantum/attack/lattice"))
-                    .header("Content-Type", "application/json")
+                    .header(CONTENT_TYPE, APPLICATION_JSON)
                     .timeout(Duration.ofSeconds(60))
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
@@ -265,7 +283,10 @@ public class PythonQuantumClient {
             
         } catch (Exception e) {
             log.error("Error attacking lattice crypto: {}", e.getMessage());
-            return createFallbackLatticeResponse(algorithm, securityLevel);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            return createFallbackLatticeResponse(algorithm, 0);
         }
     }
     

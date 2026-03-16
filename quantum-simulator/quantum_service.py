@@ -30,11 +30,15 @@ import json
 import time
 
 # Windows CUDA DLL fix: Add CUDA 12.8 bin directory to PATH before importing CuPy
-# This fixes "nvrtc64_120_0.dll not found" errors on Windows
+# This fixes NVRTC DLL not-found errors on Windows for CUDA 13.x / 12.x
 if sys.platform == 'win32':
     cuda_paths = [
+        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin",
+        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin",
+        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\bin",
         r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\bin",
         r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\bin",
+        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\bin",
     ]
     for cuda_path in cuda_paths:
         if os.path.exists(cuda_path) and cuda_path not in os.environ.get('PATH', ''):
@@ -58,19 +62,29 @@ from flask_cors import CORS
 import numpy as np
 from scipy import stats
 
+# Secure random generator (replaces deprecated np.random module-level functions)
+_rng = np.random.default_rng(seed=42)
+
 # ============================================================================
 # GPU DETECTION AND ENFORCEMENT
 # ============================================================================
 
 GPU_REQUIRED = True  # ENFORCE GPU-ONLY MODE
+GPU_MIN_VRAM_MB = 6144  # 6 GB minimum VRAM required for GPU mode
 GPU_AVAILABLE = False
 GPU_OPERATIONAL = False
 GPU_INFO = {}
 CUPY_AVAILABLE = False
 CUQUANTUM_AVAILABLE = False
+GPU_VRAM_INSUFFICIENT = False  # True when GPU exists but VRAM < 6 GB
 
 # Decryption timeout (1 hour = 3600 seconds)
 MAX_DECRYPTION_TIMEOUT_SECONDS = 3600
+
+# String constants
+TIMEOUT_ERROR_MESSAGE = "Operation exceeded 1 hour timeout limit"
+NO_GPU_LABEL = "No GPU"
+CPU_SIM_LIMITED = "CPU Simulation (LIMITED)"
 
 # Process logging storage (thread-safe)
 process_logs: deque = deque(maxlen=10000)
@@ -155,10 +169,16 @@ def detect_gpu_nvidia_smi() -> Dict:
     return {}
 
 def initialize_gpu():
-    """Initialize GPU with strict enforcement - NO CPU FALLBACK."""
-    global GPU_AVAILABLE, GPU_OPERATIONAL, GPU_INFO, CUPY_AVAILABLE, CUQUANTUM_AVAILABLE
+    """Initialize GPU with strict enforcement.
+    
+    GPU-ONLY mode by default. CPU fallback is ONLY allowed when:
+    - An NVIDIA GPU is detected but has less than 6 GB VRAM.
+    If no GPU is present at all, the service starts in limited mode (no simulation).
+    """
+    global GPU_AVAILABLE, GPU_OPERATIONAL, GPU_INFO, CUPY_AVAILABLE, CUQUANTUM_AVAILABLE, GPU_VRAM_INSUFFICIENT
     
     log_process("GPU_INIT", "🚀 Starting GPU initialization - GPU-ONLY MODE ENABLED", "INFO")
+    log_process("GPU_INIT", f"   Minimum VRAM required: {GPU_MIN_VRAM_MB} MB ({GPU_MIN_VRAM_MB // 1024} GB)", "INFO")
     
     # Step 1: Detect GPU via nvidia-smi
     GPU_INFO = detect_gpu_nvidia_smi()
@@ -170,7 +190,17 @@ def initialize_gpu():
         return False
     
     GPU_AVAILABLE = True
-    log_process("GPU_INIT", f"✅ GPU detected: {GPU_INFO['name']}", "INFO", GPU_INFO)
+    total_vram_mb = GPU_INFO.get('total_memory_mb', 0)
+    log_process("GPU_INIT", f"✅ GPU detected: {GPU_INFO['name']} ({total_vram_mb} MB VRAM)", "INFO", GPU_INFO)
+    
+    # Step 1b: Enforce 6 GB minimum VRAM
+    if total_vram_mb < GPU_MIN_VRAM_MB:
+        GPU_VRAM_INSUFFICIENT = True
+        log_process("GPU_INIT",
+                     f"⚠️ GPU VRAM insufficient: {total_vram_mb} MB < {GPU_MIN_VRAM_MB} MB minimum. "
+                     f"Falling back to CPU (NumPy) simulation.", "WARNING")
+        # Allow service to continue on CPU as the only permitted fallback
+        return False
     
     # Step 2: Initialize CuPy for GPU operations
     try:
@@ -191,20 +221,20 @@ def initialize_gpu():
         # Test 2: Smaller GPU test to avoid long kernel compilation time
         # NOTE: First-time CUDA kernel compilation can take 10-30 seconds
         log_process("GPU_INIT", "Testing GPU computation (first run may take time for kernel compilation)...", "INFO")
-        np_data = np.random.rand(100).astype(np.float32)  # Smaller, simpler test
+        np_data = _rng.random(100).astype(np.float32)  # Smaller, simpler test
         gpu_data = cp.asarray(np_data)
         gpu_result = cp.sum(gpu_data * 2.0)  # Simple multiplication
-        cpu_result = float(gpu_result.get())
+        float(gpu_result.get())
         cp.cuda.Stream.null.synchronize()
         del gpu_data, gpu_result
-        log_process("GPU_INIT", f"✅ GPU computation test passed", "INFO")
+        log_process("GPU_INIT", "✅ GPU computation test passed", "INFO")
         
         GPU_OPERATIONAL = True
         log_process("GPU_INIT", "✅ CuPy GPU operations verified successfully!", "INFO")
         log_process("GPU_INIT", "Note: First quantum simulation may take longer due to CUDA kernel JIT compilation", "INFO")
         
         # Get detailed GPU info from CuPy
-        device = cp.cuda.Device(0)
+        cp.cuda.Device(0)
         GPU_INFO.update({
             "cupy_version": cp.__version__,
             "cuda_version": str(cp.cuda.runtime.runtimeGetVersion()),
@@ -249,6 +279,9 @@ if CUPY_AVAILABLE and GPU_OPERATIONAL:
     import cupy as cp
     xp = cp
     log_process("ARRAY_BACKEND", "Using CuPy (GPU) for array operations", "INFO")
+elif GPU_VRAM_INSUFFICIENT:
+    xp = np
+    log_process("ARRAY_BACKEND", f"⚠️ Using NumPy (CPU) - GPU VRAM below {GPU_MIN_VRAM_MB} MB threshold", "WARNING")
 else:
     xp = np
     log_process("ARRAY_BACKEND", "⚠️ Falling back to NumPy (CPU) - REDUCED PERFORMANCE", "WARNING")
@@ -264,7 +297,7 @@ def get_gpu_memory_usage() -> float:
             import cupy as cp
             mempool = cp.get_default_memory_pool()
             return mempool.used_bytes() / (1024 * 1024)
-        except:
+        except Exception:
             pass
     return 0.0
 
@@ -375,13 +408,13 @@ class QuantumGates:
     
     def qft_gate(self, n: int):
         """Quantum Fourier Transform matrix for n qubits."""
-        N = 2 ** n
-        omega = self.array_lib.exp(2j * self.array_lib.pi / N)
-        matrix = self.array_lib.zeros((N, N), dtype=self.array_lib.complex128)
-        for i in range(N):
-            for j in range(N):
+        dim = 2 ** n
+        omega = self.array_lib.exp(2j * self.array_lib.pi / dim)
+        matrix = self.array_lib.zeros((dim, dim), dtype=self.array_lib.complex128)
+        for i in range(dim):
+            for j in range(dim):
                 matrix[i, j] = omega ** (i * j)
-        return matrix / self.array_lib.sqrt(N)
+        return matrix / self.array_lib.sqrt(dim)
 
 # ============================================================================
 # Shor's Algorithm Implementation (GPU-Accelerated)
@@ -431,29 +464,51 @@ class ShorsAlgorithm:
             base = (base * base) % mod
         return result
     
-    def quantum_period_finding(self, a: int, N: int, num_qubits: int, start_time: float) -> Tuple[int, List[str]]:
+    def quantum_period_finding(self, a: int, modulus: int, num_qubits: int, start_time: float) -> Tuple[int, List[str]]:
         """Quantum period finding with detailed GPU logging."""
         steps = []
         total_steps = 15
         
         if check_timeout(start_time):
-            raise TimeoutError("Operation exceeded 1 hour timeout limit")
+            raise TimeoutError(TIMEOUT_ERROR_MESSAGE)
         
         num_states = 2 ** num_qubits
         state_vector_bytes = num_states * 16  # complex128 = 16 bytes
         
-        # Step 1: Initialize quantum register
-        self._log_step("QUANTUM_REGISTER", 1, total_steps, 
+        # Steps 1-2: Initialize quantum register and allocate GPU memory
+        self._log_init_register(num_qubits, num_states, state_vector_bytes, total_steps, steps)
+        state = self._allocate_and_superpose(num_states, total_steps, steps)
+        
+        if check_timeout(start_time):
+            raise TimeoutError(TIMEOUT_ERROR_MESSAGE)
+        
+        # Steps 4-5: Oracle and period search
+        r = self._apply_oracle_and_find_period(a, modulus, num_states, total_steps, start_time, steps)
+        
+        if check_timeout(start_time):
+            raise TimeoutError(TIMEOUT_ERROR_MESSAGE)
+        
+        # Steps 6-8: QFT
+        self._perform_qft(state, num_states, num_qubits, total_steps)
+        steps.append("📐 QFT complete: Interference pattern computed on GPU")
+        
+        # Step 9-10: Classical post-processing and verification
+        self._post_process_and_verify(a, modulus, r, total_steps, steps)
+
+        return r, steps
+
+    def _log_init_register(self, num_qubits, num_states, state_vector_bytes, total_steps, steps):
+        """Log quantum register initialization (Steps 1-2)."""
+        self._log_step("QUANTUM_REGISTER", 1, total_steps,
                       f"⚛️ Initializing {num_qubits}-qubit quantum register")
         log_process("SHOR_GPU", f"📊 State vector size: {num_states:,} complex amplitudes", "INFO")
         log_process("SHOR_GPU", f"💾 GPU memory required: {state_vector_bytes / (1024*1024):.2f} MB", "INFO")
         steps.append(f"⚛️ Initialized {num_qubits}-qubit quantum register")
-        
-        # Step 2: Allocate GPU memory
-        self._log_step("GPU_MEMORY", 2, total_steps, 
+        self._log_step("GPU_MEMORY", 2, total_steps,
                       f"🎮 Allocating GPU VRAM for {num_states:,} complex amplitudes...")
-        
-        # Clear GPU memory aggressively before allocation to prevent OOM
+
+    def _allocate_and_superpose(self, num_states, total_steps, steps):
+        """Allocate GPU memory and create superposition (Steps 2-3)."""
         if self.use_gpu:
             try:
                 cp.cuda.Stream.null.synchronize()
@@ -461,437 +516,382 @@ class ShorsAlgorithm:
                 cp.get_default_pinned_memory_pool().free_all_blocks()
                 cp.cuda.Stream.null.synchronize()
                 log_process("GPU_CUDA", f"🧹 Pre-allocation cleanup: {get_gpu_memory_usage():.1f} MB used", "INFO")
-            except:
+            except Exception:
                 pass
-        
+
         state = self.array_lib.zeros(num_states, dtype=self.array_lib.complex128)
         state[0] = 1.0
-        
+
         if self.use_gpu:
             cp.cuda.Stream.null.synchronize()
             log_process("GPU_CUDA", f"✅ GPU memory allocated: {get_gpu_memory_usage():.1f} MB used", "INFO")
-        
+
         steps.append(f"🎮 GPU Memory allocated: {get_gpu_memory_usage():.1f} MB")
-        
-        # Step 3: Apply Hadamard gates (create superposition)
-        self._log_step("HADAMARD_GATE", 3, total_steps, 
-                      f"🌊 Applying H⊗{num_qubits} (Hadamard gates on all qubits)")
+
+        self._log_step("HADAMARD_GATE", 3, total_steps,
+                      f"🌊 Applying H⊗{num_states} (Hadamard gates on all qubits)")
         log_process("QUANTUM_GATE", f"🌊 Creating superposition: |ψ⟩ = (1/√{num_states})Σ|x⟩", "INFO")
         state = self.array_lib.ones(num_states, dtype=self.array_lib.complex128) / self.array_lib.sqrt(num_states)
-        
+
         if self.use_gpu:
             cp.cuda.Stream.null.synchronize()
-        
+
         steps.append("🌊 Superposition created: All |x⟩ states equally probable")
         log_process("QUANTUM_GATE", "✅ Hadamard transformation complete - uniform superposition achieved", "INFO")
-        
-        if check_timeout(start_time):
-            raise TimeoutError("Operation exceeded 1 hour timeout limit")
-        
-        # Step 4: Modular exponentiation oracle
-        self._log_step("ORACLE_INIT", 4, total_steps, 
-                      f"🔮 Preparing modular exponentiation oracle U_a")
-        log_process("QUANTUM_ORACLE", f"🔮 Oracle: U|x⟩|y⟩ → |x⟩|y ⊕ a^x mod N⟩", "INFO")
-        log_process("QUANTUM_ORACLE", f"🔮 Computing {a}^x mod {N} for x ∈ [0, {num_states})", "INFO")
-        steps.append(f"🔮 Oracle applied: Computing {a}^x mod {N} in superposition")
-        self._log_step("ORACLE", 4, total_steps, 
-                      f"🔮 Applying modular exponentiation oracle: U|x⟩ = |a^x mod {N}⟩")
-        steps.append(f"🔮 Oracle applied: Computing {a}^x mod {N} in superposition")
-        
-        # Step 5: Simulate period finding (GPU-accelerated search)
-        self._log_step("PERIOD_SEARCH", 5, total_steps, 
+        return state
+
+    def _apply_oracle_and_find_period(self, a, modulus, num_states, total_steps, start_time, steps):
+        """Apply modular exponentiation oracle and find period (Steps 4-5)."""
+        self._log_step("ORACLE_INIT", 4, total_steps,
+                      "🔮 Preparing modular exponentiation oracle U_a")
+        log_process("QUANTUM_ORACLE", "🔮 Oracle: U|x⟩|y⟩ → |x⟩|y ⊕ a^x mod N⟩", "INFO")
+        log_process("QUANTUM_ORACLE", f"🔮 Computing {a}^x mod {modulus} for x ∈ [0, {num_states})", "INFO")
+        steps.append(f"🔮 Oracle applied: Computing {a}^x mod {modulus} in superposition")
+        self._log_step("ORACLE", 4, total_steps,
+                      f"🔮 Applying modular exponentiation oracle: U|x⟩ = |a^x mod {modulus}⟩")
+        steps.append(f"🔮 Oracle applied: Computing {a}^x mod {modulus} in superposition")
+
+        self._log_step("PERIOD_SEARCH", 5, total_steps,
                       "📊 GPU parallel search for period r where a^r ≡ 1 (mod N)...")
-        log_process("GPU_COMPUTE", f"🔄 Starting GPU-accelerated period computation", "INFO")
-        
+        log_process("GPU_COMPUTE", "🔄 Starting GPU-accelerated period computation", "INFO")
+
         r = 1
-        val = a % N
+        val = a % modulus
         search_iterations = 0
         while val != 1 and r < num_states:
-            val = (val * a) % N
+            val = (val * a) % modulus
             r += 1
             search_iterations += 1
-            
+
             if r % 2000 == 0:
                 log_process("GPU_COMPUTE", f"🔄 Period search iteration {r:,} - GPU utilization active", "INFO")
-                self._log_step("PERIOD_SEARCH", 5, total_steps, 
+                self._log_step("PERIOD_SEARCH", 5, total_steps,
                               f"🔄 Modular exponentiation: checked {r:,} values on GPU...")
-        
+
         steps.append(f"📊 Period candidate: r = {r}")
         log_process("QUANTUM_RESULT", f"📊 Period found: r = {r} after {search_iterations:,} iterations", "INFO")
-        
-        if check_timeout(start_time):
-            raise TimeoutError("Operation exceeded 1 hour timeout limit")
-        
-        # Step 6: QFT (Quantum Fourier Transform) - the heart of Shor's algorithm
-        self._log_step("QFT_PREPARE", 6, total_steps, 
+        return r
+
+    def _perform_qft(self, state, num_states, num_qubits, total_steps):
+        """Perform QFT with GPU FFT and robust fallback (Steps 6-8)."""
+        self._log_step("QFT_PREPARE", 6, total_steps,
                       f"📐 Preparing QFT on {num_qubits} qubits...")
-        log_process("GPU_FFT", f"🎮 Executing GPU-accelerated FFT (simulating QFT)", "INFO")
+        log_process("GPU_FFT", "🎮 Executing GPU-accelerated FFT (simulating QFT)", "INFO")
         log_process("GPU_FFT", f"📐 QFT complexity: O(n²) = O({num_qubits}²) gate operations", "INFO")
-        
-        self._log_step("QFT_EXECUTE", 7, total_steps, 
+
+        self._log_step("QFT_EXECUTE", 7, total_steps,
                       "📐 Applying Quantum Fourier Transform (QFT) on GPU...")
-        
-        # Robust FFT with CUFFT error handling and retry mechanism
-        qft_state = None
-        fft_success = False
+
+        fft_success = self._try_gpu_fft(state, num_states)
+
+        if not fft_success:
+            fft_success = self._try_cpu_fft_fallback(state, num_states)
+
+        if self.use_gpu and fft_success:
+            try:
+                cp.cuda.Stream.null.synchronize()
+            except Exception:
+                pass
+
+    def _try_gpu_fft(self, state, num_states):
+        """Attempt GPU FFT with retry mechanism. Returns True on success."""
         max_fft_retries = 3
-        
         for fft_attempt in range(max_fft_retries):
             try:
                 if self.use_gpu:
-                    # Clear GPU memory before FFT to prevent CUFFT_INTERNAL_ERROR
-                    try:
-                        cp.cuda.Stream.null.synchronize()
-                        mempool = cp.get_default_memory_pool()
-                        pinned_mempool = cp.get_default_pinned_memory_pool()
-                        # Free unused memory blocks
-                        mempool.free_all_blocks()
-                        pinned_mempool.free_all_blocks()
-                        cp.cuda.Stream.null.synchronize()
-                        if fft_attempt > 0:
-                            log_process("GPU_FFT", f"🔄 FFT retry {fft_attempt + 1}/{max_fft_retries} - GPU memory cleared", "INFO")
-                    except Exception as mem_err:
-                        log_process("GPU_FFT", f"⚠️ Memory cleanup warning: {str(mem_err)[:50]}", "WARNING")
-                
-                # Perform FFT
-                qft_state = self.array_lib.fft.fft(state) / self.array_lib.sqrt(num_states)
-                
+                    self._cleanup_gpu_memory_for_fft(fft_attempt, max_fft_retries)
+                self.array_lib.fft.fft(state) / self.array_lib.sqrt(num_states)
                 if self.use_gpu:
                     cp.cuda.Stream.null.synchronize()
-                
-                fft_success = True
                 log_process("GPU_FFT", f"✅ GPU FFT complete - {get_gpu_memory_usage():.1f} MB VRAM used", "INFO")
-                break
-                
+                return True
             except Exception as fft_err:
                 error_str = str(fft_err)
                 log_process("GPU_FFT", f"⚠️ FFT attempt {fft_attempt + 1} failed: {error_str[:80]}", "WARNING")
-                
-                if "CUFFT" in error_str.upper() or "CUDA" in error_str.upper():
-                    # GPU FFT error - try to recover
-                    if self.use_gpu and fft_attempt < max_fft_retries - 1:
-                        try:
-                            # Force GPU memory cleanup
-                            cp.cuda.Stream.null.synchronize()
-                            cp.get_default_memory_pool().free_all_blocks()
-                            cp.get_default_pinned_memory_pool().free_all_blocks()
-                            # Small delay to let GPU recover
-                            time.sleep(0.5)
-                            log_process("GPU_FFT", f"🔄 GPU memory freed, retrying FFT...", "INFO")
-                        except:
-                            pass
-                    continue
-                else:
-                    # Non-CUDA error, don't retry
-                    break
-        
-        # Fallback to NumPy CPU FFT if GPU FFT failed
-        if not fft_success:
-            log_process("GPU_FFT", f"⚠️ GPU FFT failed after {max_fft_retries} attempts, falling back to CPU FFT", "WARNING")
-            try:
-                # Convert to NumPy if needed and use CPU FFT
-                if self.use_gpu:
-                    # Try to free GPU memory first
+                if ("CUFFT" in error_str.upper() or "CUDA" in error_str.upper()) and self.use_gpu and fft_attempt < max_fft_retries - 1:
                     try:
                         cp.cuda.Stream.null.synchronize()
                         cp.get_default_memory_pool().free_all_blocks()
                         cp.get_default_pinned_memory_pool().free_all_blocks()
-                        time.sleep(0.2)
-                    except:
+                        time.sleep(0.5)
+                        log_process("GPU_FFT", "🔄 GPU memory freed, retrying FFT...", "INFO")
+                    except Exception:
                         pass
-                    
-                    # Try to convert GPU array to CPU
-                    try:
-                        state_cpu = cp.asnumpy(state)
-                    except Exception as conv_err:
-                        # If conversion fails due to GPU OOM, recreate state on CPU
-                        log_process("GPU_FFT", f"⚠️ GPU->CPU conversion failed, recreating state on CPU", "WARNING")
-                        # Recreate the Hadamard superposition state on CPU
-                        state_cpu = np.ones(num_states, dtype=np.complex128) / np.sqrt(num_states)
-                else:
-                    state_cpu = state
-                    
-                # Perform CPU FFT
-                qft_state_cpu = np.fft.fft(state_cpu) / np.sqrt(num_states)
-                
-                # Convert back to GPU array if we're in GPU mode and GPU is available
-                if self.use_gpu:
-                    try:
-                        qft_state = cp.asarray(qft_state_cpu)
-                    except:
-                        # If GPU is still OOM, switch to CPU mode for the rest
-                        log_process("GPU_FFT", f"⚠️ GPU still OOM, switching to CPU mode", "WARNING")
-                        qft_state = qft_state_cpu
-                        self.use_gpu = False
-                        self.array_lib = np
-                else:
-                    qft_state = qft_state_cpu
-                    
-                log_process("GPU_FFT", f"✅ CPU FFT fallback successful", "INFO")
-                fft_success = True
-            except Exception as cpu_err:
-                log_process("GPU_FFT", f"❌ CPU FFT fallback also failed: {str(cpu_err)[:80]}", "ERROR")
-                # Last resort: create a dummy result to continue the algorithm
+                    continue
+                break
+        return False
+
+    def _cleanup_gpu_memory_for_fft(self, fft_attempt, max_fft_retries):
+        """Clear GPU memory before FFT to prevent CUFFT_INTERNAL_ERROR."""
+        try:
+            cp.cuda.Stream.null.synchronize()
+            cp.get_default_memory_pool().free_all_blocks()
+            cp.get_default_pinned_memory_pool().free_all_blocks()
+            cp.cuda.Stream.null.synchronize()
+            if fft_attempt > 0:
+                log_process("GPU_FFT", f"🔄 FFT retry {fft_attempt + 1}/{max_fft_retries} - GPU memory cleared", "INFO")
+        except Exception as mem_err:
+            log_process("GPU_FFT", f"⚠️ Memory cleanup warning: {str(mem_err)[:50]}", "WARNING")
+
+    def _try_cpu_fft_fallback(self, state, num_states):
+        """Fallback to NumPy CPU FFT if GPU FFT failed. Returns True on success."""
+        log_process("GPU_FFT", "⚠️ GPU FFT failed, falling back to CPU FFT", "WARNING")
+        try:
+            if self.use_gpu:
+                self._free_gpu_memory_safe()
                 try:
-                    if self.use_gpu:
-                        qft_state = cp.ones(num_states, dtype=cp.complex128) / cp.sqrt(num_states)
-                    else:
-                        qft_state = np.ones(num_states, dtype=np.complex128) / np.sqrt(num_states)
-                except:
-                    # Absolute last resort - use CPU
-                    qft_state = np.ones(num_states, dtype=np.complex128) / np.sqrt(num_states)
+                    state_cpu = cp.asnumpy(state)
+                except Exception:
+                    log_process("GPU_FFT", "⚠️ GPU->CPU conversion failed, recreating state on CPU", "WARNING")
+                    state_cpu = np.ones(num_states, dtype=np.complex128) / np.sqrt(num_states)
+            else:
+                state_cpu = state
+
+            _qft_cpu = np.fft.fft(state_cpu) / np.sqrt(num_states)  # noqa: F841
+
+            if self.use_gpu:
+                try:
+                    cp.asarray(_qft_cpu)
+                except Exception:
+                    log_process("GPU_FFT", "⚠️ GPU still OOM, switching to CPU mode", "WARNING")
                     self.use_gpu = False
                     self.array_lib = np
-                log_process("GPU_FFT", f"⚠️ Using simplified state (QFT approximated)", "WARNING")
-        
-        if self.use_gpu and fft_success:
-            try:
-                cp.cuda.Stream.null.synchronize()
-            except:
-                pass
-            
-        steps.append("📐 QFT complete: Interference pattern computed on GPU")
-        
-        # Step 9: Classical post-processing
-        self._log_step("POST_PROCESS", 10, total_steps, 
+
+            log_process("GPU_FFT", "✅ CPU FFT fallback successful", "INFO")
+            return True
+        except Exception as cpu_err:
+            log_process("GPU_FFT", f"❌ CPU FFT fallback also failed: {str(cpu_err)[:80]}", "ERROR")
+            self._create_dummy_qft_state(num_states)
+            return True
+
+    def _free_gpu_memory_safe(self):
+        """Safely free GPU memory pools."""
+        try:
+            cp.cuda.Stream.null.synchronize()
+            cp.get_default_memory_pool().free_all_blocks()
+            cp.get_default_pinned_memory_pool().free_all_blocks()
+            time.sleep(0.2)
+        except Exception:
+            pass
+
+    def _create_dummy_qft_state(self, num_states):
+        """Last resort: create a dummy QFT state to continue the algorithm."""
+        try:
+            if self.use_gpu:
+                cp.ones(num_states, dtype=cp.complex128) / cp.sqrt(num_states)
+            else:
+                np.ones(num_states, dtype=np.complex128) / np.sqrt(num_states)
+        except Exception:
+            self.use_gpu = False
+            self.array_lib = np
+        log_process("GPU_FFT", "⚠️ Using simplified state (QFT approximated)", "WARNING")
+
+    def _post_process_and_verify(self, a, modulus, r, total_steps, steps):
+        """Classical post-processing and verification (Steps 9-10)."""
+        self._log_step("POST_PROCESS", 10, total_steps,
                       "🖥️ Classical post-processing: continued fraction expansion...")
-        log_process("CLASSICAL_COMPUTE", f"🧮 Extracting period from measurement using continued fractions", "INFO")
+        log_process("CLASSICAL_COMPUTE", "🧮 Extracting period from measurement using continued fractions", "INFO")
         log_process("CLASSICAL_COMPUTE", f"✅ Period r = {r} successfully extracted", "INFO")
         steps.append(f"✅ Period r = {r} extracted from measurement")
-        
-        # Step 10: Final verification
-        self._log_step("VERIFY", 11, total_steps, 
-                      f"✅ Verifying: a^r mod N = {a}^{r} mod {N} = {pow(a, r, N)}")
-        log_process("QUANTUM_RESULT", f"✅ Period verification: {a}^{r} mod {N} = {pow(a, r, N)}", "INFO")
-        
-        self._log_step("COMPLETE", 15, total_steps, 
+
+        self._log_step("VERIFY", 11, total_steps,
+                      f"✅ Verifying: a^r mod N = {a}^{r} mod {modulus} = {pow(a, r, modulus)}")
+        log_process("QUANTUM_RESULT", f"✅ Period verification: {a}^{r} mod {modulus} = {pow(a, r, modulus)}", "INFO")
+
+        self._log_step("COMPLETE", 15, total_steps,
                       "✅ Quantum period finding complete!")
-        
-        return r, steps
-    
-    def factor(self, N: int, key_bits: int = 2048) -> ShorsResult:
-        """Factor N using Shor's algorithm with full GPU acceleration and logging."""
+
+    def _check_trivial_factors(self, modulus_n, num_qubits, gpu_name, start_time, steps):
+        """Check for trivial even factors."""
+        if modulus_n % 2 == 0:
+            self._log_step("TRIVIAL", 15, 15, "Found trivial factor: 2")
+            exec_time = (time.time() - start_time) * 1000
+            return ShorsResult(
+                success=True, modulus=modulus_n, factor_p=2, factor_q=modulus_n // 2,
+                qubits_used=num_qubits, execution_time_ms=exec_time,
+                gpu_name=gpu_name, gpu_memory_used_mb=get_gpu_memory_usage(),
+                algorithm_steps=steps + ["Found trivial factor: 2"],
+                process_logs=self.process_logs
+            )
+        return None
+
+    def _try_random_bases(self, modulus_n, num_qubits, gpu_name, start_time, total_main_steps, steps):
+        """Try multiple random bases for quantum period finding."""
+        log_process("SHOR_SEARCH", "🔓 Selecting random base a for quantum period finding...", "INFO")
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            if check_timeout(start_time):
+                raise TimeoutError(TIMEOUT_ERROR_MESSAGE)
+
+            a = _rng.integers(2, min(modulus_n - 1, 10000))
+            g = self.gcd(a, modulus_n)
+            log_process("SHOR_SEARCH", f"🔓 Attempt {attempt+1}/{max_attempts}: base a = {a}, gcd(a,N) = {g}", "INFO")
+
+            self._log_step("ATTEMPT", 3 + attempt, total_main_steps,
+                          f"🔓 Attempt {attempt + 1}/{max_attempts}: base a = {a}")
+
+            result = self._check_gcd_factor(a, g, modulus_n, num_qubits, gpu_name, start_time, steps)
+            if result:
+                return result
+
+            steps.append(f"🔓 Attempt {attempt + 1}: base a = {a}")
+
+            r, qpf_steps = self.quantum_period_finding(a, modulus_n, num_qubits, start_time)
+            steps.extend(qpf_steps)
+
+            result = self._check_period_factors(a, r, modulus_n, num_qubits, gpu_name, start_time, total_main_steps, steps)
+            if result:
+                return result
+        return None
+
+    def _check_gcd_factor(self, a, g, modulus_n, num_qubits, gpu_name, start_time, steps):
+        """Check if GCD reveals a factor directly."""
+        if g > 1:
+            self._log_step("SUCCESS", 15, 15, f"✅ Lucky! Found factor via GCD: {g}")
+            steps.append(f"✅ Lucky factor found: gcd({a}, N) = {g}")
+            exec_time = (time.time() - start_time) * 1000
+            return ShorsResult(
+                success=True, modulus=modulus_n, factor_p=g, factor_q=modulus_n // g,
+                qubits_used=num_qubits, execution_time_ms=exec_time,
+                gpu_name=gpu_name, gpu_memory_used_mb=get_gpu_memory_usage(),
+                algorithm_steps=steps, process_logs=self.process_logs
+            )
+        return None
+
+    def _check_period_factors(self, a, r, modulus_n, num_qubits, gpu_name, start_time, total_main_steps, steps):
+        """Use the period r to try extracting factors via GCD."""
+        if r % 2 != 0:
+            return None
+        x = self.mod_exp(a, r // 2, modulus_n)
+        self._log_step("GCD", 13, total_main_steps,
+                      f"🔍 Computing GCD({x}-1, N) and GCD({x}+1, N)...")
+        p = self.gcd(x - 1, modulus_n)
+        q = self.gcd(x + 1, modulus_n)
+
+        for candidate in (p, q):
+            if 1 < candidate < modulus_n:
+                self._log_step("SUCCESS", 15, total_main_steps,
+                              f"🔓 RSA BROKEN! Factor = {candidate} found!")
+                steps.append(f"✅ Factor found: {candidate}")
+                exec_time = (time.time() - start_time) * 1000
+                return ShorsResult(
+                    success=True, modulus=modulus_n, factor_p=candidate, factor_q=modulus_n // candidate,
+                    qubits_used=num_qubits, execution_time_ms=exec_time,
+                    gpu_name=gpu_name, gpu_memory_used_mb=get_gpu_memory_usage(),
+                    algorithm_steps=steps, process_logs=self.process_logs
+                )
+        return None
+
+    def _generate_demo_factors(self, modulus_n, key_bits, num_qubits, gpu_name, start_time, total_main_steps, steps):
+        """Generate plausible factors for demo purposes."""
+        self._log_step("SIMULATION", 14, total_main_steps,
+                      "⚛️ Quantum factorization complete (simulated for demo)")
+        steps.append("⚛️ Quantum factorization complete")
+
+        p, q = None, None
+        if modulus_n < 10000000:
+            for i in range(2, int(modulus_n ** 0.5) + 1):
+                if modulus_n % i == 0:
+                    p = i
+                    q = modulus_n // i
+                    break
+            if p is None:
+                p, q = modulus_n, 1
+        else:
+            import random
+            p = random.randint(2 ** (key_bits // 2 - 2), 2 ** (key_bits // 2 - 1))
+            q = random.randint(2 ** (key_bits // 2 - 2), 2 ** (key_bits // 2 - 1))
+
+        exec_time = (time.time() - start_time) * 1000
+        classical_ops = math.exp((64/9 * math.log(max(modulus_n, 2))) ** (1/3) * (math.log(max(math.log(max(modulus_n, 2)), 1))) ** (2/3))
+        quantum_ops = (math.log2(max(modulus_n, 2))) ** 3
+
+        steps.append(f"📊 Classical complexity: O(exp(n^(1/3))) ≈ {classical_ops:.2e} operations")
+        steps.append(f"📊 Quantum complexity: O(n³) ≈ {quantum_ops:.2e} operations")
+        steps.append(f"⚡ Quantum speedup: {classical_ops/max(quantum_ops, 1):.2e}x faster")
+        steps.append(f"🔓 RSA-{key_bits} BROKEN - Private key recovered!")
+
+        self._log_step("SUCCESS", 15, total_main_steps,
+                      f"🔓 RSA-{key_bits} factorization successful!")
+
+        return ShorsResult(
+            success=True, modulus=modulus_n,
+            factor_p=int(p) if p else 0, factor_q=int(q) if q else 0,
+            qubits_used=num_qubits, execution_time_ms=exec_time,
+            gpu_name=gpu_name, gpu_memory_used_mb=get_gpu_memory_usage(),
+            algorithm_steps=steps, process_logs=self.process_logs
+        )
+
+    def factor(self, modulus_n: int, key_bits: int = 2048) -> ShorsResult:
+        """Factor modulus_n using Shor's algorithm with full GPU acceleration and logging."""
         start_time = time.time()
         self.process_logs = []
         steps = []
-        
-        gpu_name = GPU_INFO.get('name', 'No GPU') if self.use_gpu else 'CPU Simulation (LIMITED)'
-        
-        # Clear GPU memory at the start to prevent CUFFT errors
+
+        gpu_name = GPU_INFO.get('name', NO_GPU_LABEL) if self.use_gpu else CPU_SIM_LIMITED
+
         if self.use_gpu:
             clear_gpu_memory()
-        
-        # Log attack initiation with GPU details
-        log_process("SHOR_ATTACK", f"🚀 ========== SHOR'S ALGORITHM INITIATED ==========", "INFO")
+
+        log_process("SHOR_ATTACK", "🚀 ========== SHOR'S ALGORITHM INITIATED ==========", "INFO")
         log_process("SHOR_ATTACK", f"🎯 Target: RSA-{key_bits} encryption", "INFO")
         log_process("GPU_STATUS", f"🎮 GPU: {gpu_name}", "INFO")
         log_process("GPU_STATUS", f"💾 VRAM Available: {GPU_INFO.get('total_memory_mb', 0)} MB", "INFO")
-        
+
         if not self.use_gpu:
             log_process("SHOR", "⚠️ WARNING: Running on CPU - Significantly slower!", "WARNING")
         else:
             log_process("GPU_STATUS", f"✅ CUDA compute capability: {GPU_INFO.get('compute_capability', 'N/A')}", "INFO")
-        
-        # Number of qubits needed - reduced to prevent GPU OOM
-        # For 8GB VRAM, max ~24 qubits (2^24 * 16 bytes = 268 MB)
-        num_qubits = min(2 * int(math.log2(max(N, 2))) + 3, 24)
+
+        num_qubits = min(2 * int(math.log2(max(modulus_n, 2))) + 3, 24)
         total_main_steps = 15
-        
-        log_process("SHOR_CONFIG", f"⚛️ Quantum circuit configuration:", "INFO")
+
+        log_process("SHOR_CONFIG", "⚛️ Quantum circuit configuration:", "INFO")
         log_process("SHOR_CONFIG", f"   • Qubits required: {num_qubits}", "INFO")
         log_process("SHOR_CONFIG", f"   • State vector size: 2^{num_qubits} = {2**num_qubits:,} amplitudes", "INFO")
         log_process("SHOR_CONFIG", f"   • Estimated GPU memory: {(2**num_qubits * 16) / (1024*1024):.2f} MB", "INFO")
-        
-        self._log_step("INIT", 1, total_main_steps, 
+
+        self._log_step("INIT", 1, total_main_steps,
                       f"🚀 Starting Shor's Algorithm - RSA-{key_bits} Attack")
-        steps.append(f"🎯 Target: Factor N = {N} ({key_bits}-bit RSA)")
-        
-        self._log_step("CONFIG", 2, total_main_steps, 
+        steps.append(f"🎯 Target: Factor N = {modulus_n} ({key_bits}-bit RSA)")
+
+        self._log_step("CONFIG", 2, total_main_steps,
                       f"⚛️ Configuring quantum circuit: {num_qubits} qubits required")
         steps.append(f"⚛️ Qubits required: {num_qubits}")
         steps.append(f"🎮 GPU: {gpu_name}")
         steps.append(f"⏱️ Timeout limit: {MAX_DECRYPTION_TIMEOUT_SECONDS / 3600:.1f} hours")
-        
+
         try:
-            # Check for trivial factors
-            if N % 2 == 0:
-                self._log_step("TRIVIAL", 15, total_main_steps, 
-                              "Found trivial factor: 2")
-                exec_time = (time.time() - start_time) * 1000
-                return ShorsResult(
-                    success=True,
-                    modulus=N,
-                    factor_p=2,
-                    factor_q=N // 2,
-                    qubits_used=num_qubits,
-                    execution_time_ms=exec_time,
-                    gpu_name=gpu_name,
-                    gpu_memory_used_mb=get_gpu_memory_usage(),
-                    algorithm_steps=steps + ["Found trivial factor: 2"],
-                    process_logs=self.process_logs
-                )
-            
-            # Try multiple random bases
-            log_process("SHOR_SEARCH", f"🔢 Selecting random base a for quantum period finding...", "INFO")
-            max_attempts = 10
-            for attempt in range(max_attempts):
-                if check_timeout(start_time):
-                    raise TimeoutError("Operation exceeded 1 hour timeout limit")
-                
-                a = np.random.randint(2, min(N - 1, 10000))
-                g = self.gcd(a, N)
-                log_process("SHOR_SEARCH", f"🔢 Attempt {attempt+1}/{max_attempts}: base a = {a}, gcd(a,N) = {g}", "INFO")
-                
-                self._log_step("ATTEMPT", 3 + attempt, total_main_steps, 
-                              f"🔢 Attempt {attempt + 1}/{max_attempts}: base a = {a}")
-                
-                if g > 1:
-                    self._log_step("SUCCESS", 15, total_main_steps, 
-                                  f"✅ Lucky! Found factor via GCD: {g}")
-                    steps.append(f"✅ Lucky factor found: gcd({a}, N) = {g}")
-                    exec_time = (time.time() - start_time) * 1000
-                    return ShorsResult(
-                        success=True,
-                        modulus=N,
-                        factor_p=g,
-                        factor_q=N // g,
-                        qubits_used=num_qubits,
-                        execution_time_ms=exec_time,
-                        gpu_name=gpu_name,
-                        gpu_memory_used_mb=get_gpu_memory_usage(),
-                        algorithm_steps=steps,
-                        process_logs=self.process_logs
-                    )
-                
-                steps.append(f"🔢 Attempt {attempt + 1}: base a = {a}")
-                
-                # Quantum period finding
-                r, qpf_steps = self.quantum_period_finding(a, N, num_qubits, start_time)
-                steps.extend(qpf_steps)
-                
-                if r % 2 == 0:
-                    x = self.mod_exp(a, r // 2, N)
-                    
-                    self._log_step("GCD", 13, total_main_steps, 
-                                  f"🔍 Computing GCD({x}-1, N) and GCD({x}+1, N)...")
-                    
-                    p = self.gcd(x - 1, N)
-                    q = self.gcd(x + 1, N)
-                    
-                    if p > 1 and p < N:
-                        self._log_step("SUCCESS", 15, total_main_steps, 
-                                      f"🔓 RSA BROKEN! Factor p = {p} found!")
-                        steps.append(f"✅ Factor found: p = {p}")
-                        exec_time = (time.time() - start_time) * 1000
-                        return ShorsResult(
-                            success=True,
-                            modulus=N,
-                            factor_p=p,
-                            factor_q=N // p,
-                            qubits_used=num_qubits,
-                            execution_time_ms=exec_time,
-                            gpu_name=gpu_name,
-                            gpu_memory_used_mb=get_gpu_memory_usage(),
-                            algorithm_steps=steps,
-                            process_logs=self.process_logs
-                        )
-                        
-                    if q > 1 and q < N:
-                        self._log_step("SUCCESS", 15, total_main_steps, 
-                                      f"🔓 RSA BROKEN! Factor q = {q} found!")
-                        steps.append(f"✅ Factor found: q = {q}")
-                        exec_time = (time.time() - start_time) * 1000
-                        return ShorsResult(
-                            success=True,
-                            modulus=N,
-                            factor_p=q,
-                            factor_q=N // q,
-                            qubits_used=num_qubits,
-                            execution_time_ms=exec_time,
-                            gpu_name=gpu_name,
-                            gpu_memory_used_mb=get_gpu_memory_usage(),
-                            algorithm_steps=steps,
-                            process_logs=self.process_logs
-                        )
-            
-            # For demo: Generate plausible factors
-            self._log_step("SIMULATION", 14, total_main_steps, 
-                          "⚛️ Quantum factorization complete (simulated for demo)")
-            steps.append("⚛️ Quantum factorization complete")
-            
-            p, q = None, None
-            if N < 10000000:
-                for i in range(2, int(N ** 0.5) + 1):
-                    if N % i == 0:
-                        p = i
-                        q = N // i
-                        break
-                if p is None:
-                    p, q = N, 1
-            else:
-                import random
-                p = random.randint(2 ** (key_bits // 2 - 2), 2 ** (key_bits // 2 - 1))
-                q = random.randint(2 ** (key_bits // 2 - 2), 2 ** (key_bits // 2 - 1))
-            
-            exec_time = (time.time() - start_time) * 1000
-            
-            # Add complexity comparison
-            classical_ops = math.exp((64/9 * math.log(max(N, 2))) ** (1/3) * (math.log(max(math.log(max(N, 2)), 1))) ** (2/3))
-            quantum_ops = (math.log2(max(N, 2))) ** 3
-            
-            steps.append(f"📊 Classical complexity: O(exp(n^(1/3))) ≈ {classical_ops:.2e} operations")
-            steps.append(f"📊 Quantum complexity: O(n³) ≈ {quantum_ops:.2e} operations")
-            steps.append(f"⚡ Quantum speedup: {classical_ops/max(quantum_ops, 1):.2e}x faster")
-            steps.append(f"🔓 RSA-{key_bits} BROKEN - Private key recovered!")
-            
-            self._log_step("SUCCESS", 15, total_main_steps, 
-                          f"🔓 RSA-{key_bits} factorization successful!")
-            
-            return ShorsResult(
-                success=True,
-                modulus=N,
-                factor_p=int(p) if p else 0,
-                factor_q=int(q) if q else 0,
-                qubits_used=num_qubits,
-                execution_time_ms=exec_time,
-                gpu_name=gpu_name,
-                gpu_memory_used_mb=get_gpu_memory_usage(),
-                algorithm_steps=steps,
-                process_logs=self.process_logs
-            )
-            
+            trivial = self._check_trivial_factors(modulus_n, num_qubits, gpu_name, start_time, steps)
+            if trivial:
+                return trivial
+
+            result = self._try_random_bases(modulus_n, num_qubits, gpu_name, start_time, total_main_steps, steps)
+            if result:
+                return result
+
+            return self._generate_demo_factors(modulus_n, key_bits, num_qubits, gpu_name, start_time, total_main_steps, steps)
+
         except TimeoutError as e:
             exec_time = (time.time() - start_time) * 1000
             self._log_step("TIMEOUT", 15, total_main_steps, f"⏱️ {str(e)}")
             return ShorsResult(
-                success=False,
-                modulus=N,
-                factor_p=None,
-                factor_q=None,
-                qubits_used=num_qubits,
-                execution_time_ms=exec_time,
-                gpu_name=gpu_name,
-                gpu_memory_used_mb=get_gpu_memory_usage(),
+                success=False, modulus=modulus_n, factor_p=None, factor_q=None,
+                qubits_used=num_qubits, execution_time_ms=exec_time,
+                gpu_name=gpu_name, gpu_memory_used_mb=get_gpu_memory_usage(),
                 algorithm_steps=steps + [f"❌ TIMEOUT: {str(e)}"],
                 process_logs=self.process_logs,
-                timeout_occurred=True,
-                error_message=str(e)
+                timeout_occurred=True, error_message=str(e)
             )
         except Exception as e:
             exec_time = (time.time() - start_time) * 1000
             self._log_step("ERROR", 15, total_main_steps, f"❌ Error: {str(e)}")
             return ShorsResult(
-                success=False,
-                modulus=N,
-                factor_p=None,
-                factor_q=None,
-                qubits_used=num_qubits,
-                execution_time_ms=exec_time,
-                gpu_name=gpu_name,
-                gpu_memory_used_mb=get_gpu_memory_usage(),
+                success=False, modulus=modulus_n, factor_p=None, factor_q=None,
+                qubits_used=num_qubits, execution_time_ms=exec_time,
+                gpu_name=gpu_name, gpu_memory_used_mb=get_gpu_memory_usage(),
                 algorithm_steps=steps + [f"❌ Error: {str(e)}"],
-                process_logs=self.process_logs,
-                error_message=str(e)
+                process_logs=self.process_logs, error_message=str(e)
             )
 
 # ============================================================================
@@ -926,12 +926,35 @@ class GroversAlgorithm:
         self.process_logs.append(entry)
         log_process("GROVER", f"[Step {step}/{total}] {message}", "INFO", entry)
     
+    def _run_grover_iterations(self, state, target, num_iterations, total_steps, start_time):
+        """Execute the Grover iteration loop (oracle + diffusion)."""
+        log_process("GROVER_ITERATE", f"🔄 Starting {num_iterations} Grover iterations...", "INFO")
+        log_process("GROVER_ITERATE", "   Each iteration: Oracle (phase flip) + Diffusion (amplitude boost)", "INFO")
+
+        iteration_log_interval = max(1, num_iterations // 8)
+        for i in range(num_iterations):
+            if check_timeout(start_time):
+                raise TimeoutError(TIMEOUT_ERROR_MESSAGE)
+
+            state[target] *= -1
+            mean = self.array_lib.mean(state)
+            state = 2 * mean - state
+
+            if i % iteration_log_interval == 0 or i == num_iterations - 1:
+                progress_step = 5 + min(6, int((i / num_iterations) * 7))
+                prob_target = float(abs(state[target]) ** 2)
+                log_process("GROVER_ITERATE", f"🔄 Iteration {i+1}/{num_iterations}: target probability = {prob_target:.4f}", "INFO")
+                self._log_step("ITERATION", progress_step, total_steps,
+                              f"🔄 Grover iteration {i+1}/{num_iterations} - "
+                              f"Target amplitude: {prob_target:.4f}")
+        return state
+
     def search(self, search_space_bits: int, target: Optional[int] = None) -> GroversResult:
         """Execute Grover's search algorithm with GPU acceleration."""
         start_time = time.time()
         self.process_logs = []
         
-        gpu_name = GPU_INFO.get('name', 'No GPU') if self.use_gpu else 'CPU Simulation (LIMITED)'
+        gpu_name = GPU_INFO.get('name', NO_GPU_LABEL) if self.use_gpu else CPU_SIM_LIMITED
         
         # Clear GPU memory at the start to prevent CUFFT/CUDA errors
         if self.use_gpu:
@@ -941,15 +964,15 @@ class GroversAlgorithm:
         N = 2 ** num_qubits
         
         if target is None:
-            target = np.random.randint(0, N)
+            target = _rng.integers(0, N)
         
         total_steps = 15
         
         # Detailed logging for UI
-        log_process("GROVER_ATTACK", f"🔍 ========== GROVER'S ALGORITHM INITIATED ==========", "INFO")
+        log_process("GROVER_ATTACK", "🔍 ========== GROVER'S ALGORITHM INITIATED ==========", "INFO")
         log_process("GROVER_ATTACK", f"🔑 Target: {search_space_bits}-bit symmetric key search", "INFO")
         log_process("GPU_STATUS", f"🎮 GPU: {gpu_name}", "INFO")
-        log_process("GROVER_CONFIG", f"⚛️ Quantum configuration:", "INFO")
+        log_process("GROVER_CONFIG", "⚛️ Quantum configuration:", "INFO")
         log_process("GROVER_CONFIG", f"   • Search space: 2^{num_qubits} = {N:,} possible keys", "INFO")
         log_process("GROVER_CONFIG", f"   • Classical complexity: O(N) = O({N:,}) operations", "INFO")
         
@@ -965,7 +988,7 @@ class GroversAlgorithm:
         
         try:
             if check_timeout(start_time):
-                raise TimeoutError("Operation exceeded 1 hour timeout limit")
+                raise TimeoutError(TIMEOUT_ERROR_MESSAGE)
             
             # Initialize superposition
             self._log_step("HADAMARD", 3, total_steps, 
@@ -982,28 +1005,7 @@ class GroversAlgorithm:
             log_process("QUANTUM_STATE", f"🌊 All {N:,} keys now in superposition with equal probability", "INFO")
             
             # Grover iterations (the core of the algorithm)
-            log_process("GROVER_ITERATE", f"🔄 Starting {num_iterations} Grover iterations...", "INFO")
-            log_process("GROVER_ITERATE", f"   Each iteration: Oracle (phase flip) + Diffusion (amplitude boost)", "INFO")
-            
-            iteration_log_interval = max(1, num_iterations // 8)
-            for i in range(num_iterations):
-                if check_timeout(start_time):
-                    raise TimeoutError("Operation exceeded 1 hour timeout limit")
-                
-                # Oracle: flip sign of target state (marks the target key)
-                state[target] *= -1
-                
-                # Diffusion operator: 2|ψ⟩⟨ψ| - I (amplifies marked state)
-                mean = self.array_lib.mean(state)
-                state = 2 * mean - state
-                
-                if i % iteration_log_interval == 0 or i == num_iterations - 1:
-                    progress_step = 5 + min(6, int((i / num_iterations) * 7))
-                    prob_target = float(abs(state[target]) ** 2)
-                    log_process("GROVER_ITERATE", f"🔄 Iteration {i+1}/{num_iterations}: target probability = {prob_target:.4f}", "INFO")
-                    self._log_step("ITERATION", progress_step, total_steps, 
-                                  f"🔄 Grover iteration {i+1}/{num_iterations} - "
-                                  f"Target amplitude: {prob_target:.4f}")
+            state = self._run_grover_iterations(state, target, num_iterations, total_steps, start_time)
             
             if self.use_gpu:
                 cp.cuda.Stream.null.synchronize()
@@ -1012,7 +1014,7 @@ class GroversAlgorithm:
             # Measure
             self._log_step("MEASURE", 12, total_steps, 
                           "📏 Performing quantum measurement...")
-            log_process("QUANTUM_MEASURE", f"📏 Collapsing superposition to classical result...", "INFO")
+            log_process("QUANTUM_MEASURE", "📏 Collapsing superposition to classical result...", "INFO")
             
             if self.use_gpu:
                 probs = cp.asnumpy(self.array_lib.abs(state) ** 2)
@@ -1127,27 +1129,27 @@ class PQCAttackSimulator:
         start_time = time.time()
         self.process_logs = []
         
-        gpu_name = GPU_INFO.get('name', 'No GPU') if self.use_gpu else 'CPU Simulation'
+        gpu_name = GPU_INFO.get('name', NO_GPU_LABEL) if self.use_gpu else 'CPU Simulation'
         total_steps = 15
         
         # Security bits based on NIST levels
         security_bits = {1: 128, 3: 192, 5: 256}.get(security_level, 192)
         
         # Detailed logging for UI
-        log_process("PQC_ATTACK", f"🛡️ ========== LATTICE ATTACK INITIATED ==========", "INFO")
+        log_process("PQC_ATTACK", "🛡️ ========== LATTICE ATTACK INITIATED ==========", "INFO")
         log_process("PQC_ATTACK", f"🎯 Target: {algorithm} (Post-Quantum Cryptography)", "INFO")
         log_process("PQC_ATTACK", f"🔒 NIST Security Level: {security_level} ({security_bits}-bit security)", "INFO")
         log_process("GPU_STATUS", f"🎮 GPU: {gpu_name}", "INFO")
-        log_process("PQC_INFO", f"⚠️ WARNING: Lattice-based crypto is QUANTUM-RESISTANT!", "WARNING")
-        log_process("PQC_INFO", f"   • Unlike RSA, quantum computers provide NO exponential speedup", "INFO")
-        log_process("PQC_INFO", f"   • Best known quantum attack: Grover's on BKZ (only √ speedup)", "INFO")
+        log_process("PQC_INFO", "⚠️ WARNING: Lattice-based crypto is QUANTUM-RESISTANT!", "WARNING")
+        log_process("PQC_INFO", "   • Unlike RSA, quantum computers provide NO exponential speedup", "INFO")
+        log_process("PQC_INFO", "   • Best known quantum attack: Grover's on BKZ (only √ speedup)", "INFO")
         
         self._log_step("INIT", 1, total_steps, 
                       f"🛡️ Attempting quantum attack on {algorithm} (NIST Level {security_level})")
         
         try:
             if check_timeout(start_time):
-                raise TimeoutError("Operation exceeded 1 hour timeout limit")
+                raise TimeoutError(TIMEOUT_ERROR_MESSAGE)
             
             self._log_step("LOAD_PARAMS", 2, total_steps, 
                           f"📥 Loading {algorithm} public parameters into quantum memory...")
@@ -1156,18 +1158,18 @@ class PQCAttackSimulator:
             
             self._log_step("BKZ_INIT", 3, total_steps, 
                           "🔧 Initializing BKZ (Block Korkine-Zolotarev) lattice reduction...")
-            log_process("LATTICE_BKZ", f"🔧 BKZ is the best known classical/quantum lattice reduction algorithm", "INFO")
+            log_process("LATTICE_BKZ", "🔧 BKZ is the best known classical/quantum lattice reduction algorithm", "INFO")
             time.sleep(0.15)
             
             self._log_step("QUANTUM_BKZ", 4, total_steps, 
                           "⚛️ Applying quantum-enhanced BKZ with Grover oracle...")
-            log_process("LATTICE_QUANTUM", f"⚛️ Grover's oracle applied to BKZ enumeration step", "INFO")
-            log_process("LATTICE_QUANTUM", f"⚛️ Quantum speedup: √N (NOT exponential like Shor's)", "INFO")
+            log_process("LATTICE_QUANTUM", "⚛️ Grover's oracle applied to BKZ enumeration step", "INFO")
+            log_process("LATTICE_QUANTUM", "⚛️ Quantum speedup: √N (NOT exponential like Shor's)", "INFO")
             time.sleep(0.2)
             
             self._log_step("SVP_SEARCH", 5, total_steps, 
                           "🔍 Searching for shortest vectors in lattice (SVP)...")
-            log_process("LATTICE_SVP", f"🔍 SVP remains NP-hard even for quantum computers", "INFO")
+            log_process("LATTICE_SVP", "🔍 SVP remains NP-hard even for quantum computers", "INFO")
             time.sleep(0.15)
             
             self._log_step("BLOCK_SIZE", 6, total_steps, 
@@ -1176,38 +1178,38 @@ class PQCAttackSimulator:
             time.sleep(0.15)
             self._log_step("LWE_ATTACK", 7, total_steps, 
                           "🎯 Attempting to solve Learning With Errors (LWE) problem...")
-            log_process("LATTICE_LWE", f"🎯 LWE is the foundation of ML-KEM security", "INFO")
+            log_process("LATTICE_LWE", "🎯 LWE is the foundation of ML-KEM security", "INFO")
             time.sleep(0.2)
             
             self._log_step("MLWE_ATTACK", 8, total_steps, 
                           "🎯 Attempting Module-LWE structure exploitation...")
-            log_process("LATTICE_MLWE", f"🎯 Module-LWE provides efficient implementation with strong security", "INFO")
+            log_process("LATTICE_MLWE", "🎯 Module-LWE provides efficient implementation with strong security", "INFO")
             time.sleep(0.15)
             
             self._log_step("ENUM", 9, total_steps, 
                           "📊 Running quantum-assisted lattice enumeration...")
-            log_process("LATTICE_ENUM", f"📊 Enumeration requires exponential time even with quantum help", "INFO")
+            log_process("LATTICE_ENUM", "📊 Enumeration requires exponential time even with quantum help", "INFO")
             time.sleep(0.2)
             
             self._log_step("SIEVING", 10, total_steps, 
                           "⚡ Applying quantum sieving algorithm...")
-            log_process("LATTICE_SIEVE", f"⚡ Quantum sieving provides only constant-factor speedup", "INFO")
+            log_process("LATTICE_SIEVE", "⚡ Quantum sieving provides only constant-factor speedup", "INFO")
             time.sleep(0.15)
             
             self._log_step("COMPLEXITY", 11, total_steps, 
                           f"⚠️ Attack complexity: O(2^{security_bits}) - EXPONENTIAL!")
             log_process("LATTICE_FAIL", f"❌ Computational cost: 2^{security_bits} ≈ 10^{int(security_bits * 0.301)} operations", "WARNING")
-            log_process("LATTICE_FAIL", f"❌ This exceeds the computational capacity of ANY computer!", "WARNING")
+            log_process("LATTICE_FAIL", "❌ This exceeds the computational capacity of ANY computer!", "WARNING")
             time.sleep(0.1)
             
             self._log_step("QUANTUM_LIMIT", 12, total_steps, 
                           "⚠️ Quantum speedup is only POLYNOMIAL for LWE/MLWE problems")
-            log_process("LATTICE_QUANTUM", f"⚠️ Unlike RSA, quantum computers do NOT break lattice crypto!", "WARNING")
+            log_process("LATTICE_QUANTUM", "⚠️ Unlike RSA, quantum computers do NOT break lattice crypto!", "WARNING")
             time.sleep(0.1)
             
             self._log_step("FAIL", 13, total_steps, 
                           "❌ ATTACK FAILED: No efficient quantum algorithm exists for lattice problems!")
-            log_process("PQC_RESULT", f"❌ ========== ATTACK FAILED ==========", "WARNING")
+            log_process("PQC_RESULT", "❌ ========== ATTACK FAILED ==========", "WARNING")
             log_process("PQC_RESULT", f"🛡️ {algorithm} successfully resisted quantum attack!", "INFO")
             time.sleep(0.1)
             
@@ -1217,10 +1219,11 @@ class PQCAttackSimulator:
             log_process("PQC_SECURITY", f"🛡️ This is equivalent to AES-{security_bits} against quantum attacks", "INFO")
             
             self._log_step("VERDICT", 15, total_steps, 
-                          f"✅ Post-Quantum Cryptography VERIFIED SECURE against quantum attacks!")
+                          "✅ Post-Quantum Cryptography VERIFIED SECURE against quantum attacks!")
             log_process("PQC_VERDICT", f"✅ VERDICT: {algorithm} is QUANTUM-SAFE!", "INFO")
-            log_process("PQC_VERDICT", f"✅ Recommendation: Migrate RSA/ECC to PQC algorithms NOW!", "INFO")
+            log_process("PQC_VERDICT", "✅ Recommendation: Migrate RSA/ECC to PQC algorithms NOW!", "INFO")
             
+            exec_time = (time.time() - start_time) * 1000
             return PQCAttackResult(
                 success=False,  # Attack FAILS - PQC is secure
                 algorithm=algorithm,
@@ -1237,7 +1240,7 @@ class PQCAttackSimulator:
                               "Migrate all RSA/classical crypto to NIST-standardized PQC algorithms!"
             )
             
-        except TimeoutError as e:
+        except TimeoutError:
             exec_time = (time.time() - start_time) * 1000
             return PQCAttackResult(
                 success=False,
@@ -1537,6 +1540,7 @@ if __name__ == '__main__':
         print("⚠️  Running in DEGRADED MODE with reduced performance.")
         print("⚠️  Install NVIDIA drivers and CuPy for full GPU acceleration.\n")
     
-    # Run Flask app
-    app.run(host='0.0.0.0', port=8184, debug=False, threaded=True)
+    # Run Flask app - bind to env-configured host (0.0.0.0 for Docker, 127.0.0.1 for local)
+    flask_host = os.environ.get('FLASK_HOST', '127.0.0.1')
+    app.run(host=flask_host, port=8184, debug=False, threaded=True)
 

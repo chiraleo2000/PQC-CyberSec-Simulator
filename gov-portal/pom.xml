@@ -8,7 +8,7 @@
     <parent>
         <groupId>com.pqc</groupId>
         <artifactId>pqc-cybersec-simulator</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.1</version>
     </parent>
 
     <artifactId>gov-portal</artifactId>
