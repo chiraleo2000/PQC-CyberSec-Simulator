@@ -532,6 +532,10 @@
             <span>Timeout:</span>
             <span class="stat-value" id="timeoutLimit">1 hour</span>
         </div>
+        <div class="stat">
+            <span>Est. remaining:</span>
+            <span class="stat-value" id="estTime">--:--</span>
+        </div>
     </div>
     
     <div class="main-container">
@@ -613,9 +617,24 @@
         // Global state
         let decryptionQueue = [];
         let processingItem = null;
+        let decryptInProgress = false;
         let results = [];
         let gpuInfo = null;
         let scenarioResults = {}; // Track results by scenario
+        let liveVramMb = null;
+
+        function setText(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        }
+        function setStyle(id, prop, value) {
+            const el = document.getElementById(id);
+            if (el) el.style[prop] = value;
+        }
+        function setHtml(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = value;
+        }
         
         // Show scenario summary modal
         function showScenarioSummary() {
@@ -684,14 +703,14 @@
             return algo.replace(/_/g, '-');
         }
         
-        // Decryption time estimates (realistic simulation)
+        // Decryption time estimates (demo-friendly pacing; progress advances every step)
         const DECRYPT_TIMES = {
-            'RSA-2048': { min: 30000, max: 60000, steps: 15 },      // 30-60 seconds
-            'RSA-4096': { min: 60000, max: 120000, steps: 20 },     // 1-2 minutes
-            'AES-128': { min: 120000, max: 180000, steps: 25 },     // 2-3 minutes (Grover's)
-            'AES-256': { min: 180000, max: 300000, steps: 30 },     // 3-5 minutes
-            'ML-KEM-768': { min: 300000, max: 300000, steps: 50 },  // Will fail
-            'ML-DSA-65': { min: 300000, max: 300000, steps: 50 },   // Will fail
+            'RSA-2048': { min: 8000, max: 12000, steps: 15 },
+            'RSA-4096': { min: 12000, max: 18000, steps: 20 },
+            'AES-128': { min: 10000, max: 15000, steps: 25 },
+            'AES-256': { min: 12000, max: 18000, steps: 30 },
+            'ML-KEM-768': { min: 8000, max: 10000, steps: 50 },
+            'ML-DSA-65': { min: 8000, max: 10000, steps: 50 },
         };
         
         const SHOR_STEPS = [
@@ -760,30 +779,30 @@
             setTimeout(async () => {
                 await checkForNewData();
                 log('🔄 Initial data sync complete', 'info');
-                // Auto-start decryption immediately if data is available
                 autoStartDecryption();
             }, 500);
             
-            // Check for new data every 1 second (faster for demo) and auto-start decryption
+            // Check for new harvested items (do not auto-spam decrypt)
             setInterval(async () => {
                 const prevCount = decryptionQueue.length;
                 await checkForNewData();
                 if (decryptionQueue.length > prevCount) {
                     log(`📥 ${decryptionQueue.length - prevCount} new item(s) detected`, 'success');
-                    // Immediately start decryption on new items
                     autoStartDecryption();
                 }
-            }, 1000);
+            }, 2000);
             
-            // Fetch process logs every 500ms during decryption (faster for real-time feel)
+            // Light log polling — heavier while decrypting
             setInterval(async () => {
-                await fetchQuantumServiceLogs();
-            }, 500);
+                if (decryptInProgress) {
+                    await fetchQuantumServiceLogs();
+                }
+            }, 2000);
             
-            // Auto-start decryption check every 500ms
+            // Single auto-start watcher (avoids concurrent decrypt starts)
             setInterval(() => {
                 autoStartDecryption();
-            }, 500);
+            }, 1500);
         });
         
         // Python Quantum Service URL (direct connection)
@@ -836,8 +855,13 @@
             // Update GPU status panel
             if (data.gpu_status) {
                 document.getElementById('qsGpuName').textContent = data.gpu_status.name || 'Unknown';
-                document.getElementById('qsVramUsed').textContent = `${data.gpu_status.memory_used_mb || 0} MB`;
+                const used = data.gpu_status.memory_used_mb || 0;
+                liveVramMb = used;
+                document.getElementById('qsVramUsed').textContent = `${used} MB`;
                 document.getElementById('qsGpuName').style.color = data.gpu_status.operational ? '#00ff00' : '#ff0040';
+                if (document.getElementById('gpuMemory') && gpuInfo?.memoryMB) {
+                    document.getElementById('gpuMemory').textContent = `${used} / ${gpuInfo.memoryMB} MB`;
+                }
             }
             
             if (data.logs && data.logs.length > 0) {
@@ -940,26 +964,90 @@
             document.getElementById('qsGpuName').style.color = data.gpu_operational ? '#00ff00' : '#ff0040';
         }
         
-        // Auto-start decryption on new items (both vulnerable AND PQC to show full demo)
-        async function autoStartDecryption() {
-            // Get all queued items (not just vulnerable - we want to show PQC protection too)
-            const queued = decryptionQueue.filter(q => q.status === 'queued');
-            
-            // Only auto-start if not already processing
-            if (processingItem === null && queued.length > 0) {
-                const item = queued[0];
-                const isPqc = item.encryption && (item.encryption.includes('ML-KEM') || item.encryption.includes('ML-DSA'));
-                const isRsa = item.encryption && item.encryption.includes('RSA');
-                
-                if (isRsa) {
-                    log(`⚛️ Auto-starting Shor's Algorithm attack on ${item.type} (${item.encryption})...`, 'quantum');
-                } else if (isPqc) {
-                    log(`🛡️ Auto-starting lattice attack on ${item.type} (${item.encryption})...`, 'quantum');
-                } else {
-                    log(`⚛️ Auto-starting quantum attack on ${item.type} (${item.encryption})...`, 'quantum');
-                }
-                await startDecrypt(item.id);
+        function isPqcItem(item) {
+            const enc = (item.encryption || '').toUpperCase();
+            return enc.includes('ML-KEM') || enc.includes('ML-DSA') || enc.includes('SLH-DSA') || enc.includes('KYBER') || enc.includes('DILITHIUM');
+        }
+
+        function buildDemoPlaintext(item, factors) {
+            const applicant = item.applicant || 'john.citizen';
+            const p = factors?.factor_p || factors?.p || '104729';
+            const q = factors?.factor_q || factors?.q || '104743';
+            return [
+                '=== DECRYPTED PLAINTEXT (PROOF) ===',
+                `Document ID : ${item.documentId}`,
+                `Type        : ${item.type}`,
+                `Applicant   : ${applicant}`,
+                `Encryption  : ${item.encryption} → BROKEN by Shor`,
+                `Signature   : ${item.signature}`,
+                `RSA factors : p=${p}, q=${q}`,
+                `AES-256 key : ${generateHex(32)}`,
+                `Body        : [SENSITIVE] ${item.type} records for ${applicant}`,
+                `             SSN ***-**-4281 | Address 742 Evergreen Terrace`,
+                `             License/Tax payload recovered after AES key unwrapped`,
+                '=================================='
+            ].join('\n');
+        }
+
+        /** PQC: no quantum decrypt — immediate protected pass-through */
+        async function passThroughPqc(item) {
+            if (!item || item.status !== 'queued') return;
+            if (decryptInProgress) return;
+            decryptInProgress = true;
+            processingItem = item;
+            try {
+                item.status = 'failed';
+                item.progress = 100;
+                item.currentStep = 0;
+                item.steps = ['🛡️ PQC PASS-THROUGH — ML-KEM/ML-DSA resists Shor; decrypt skipped'];
+                item.startTime = Date.now();
+                item.endTime = Date.now();
+                item.result = {
+                    success: false,
+                    documentId: item.documentId,
+                    type: item.type,
+                    encryption: item.encryption,
+                    signature: item.signature,
+                    passThrough: true,
+                    message: 'PQC protected — decrypt not attempted',
+                    plaintext: null
+                };
+                log('══════════════════════════════════════════════════', 'success');
+                log(`🛡️ PQC PASS-THROUGH: ${item.type} | ${item.documentId}`, 'success');
+                log(`   Encryption ${item.encryption} is quantum-resistant`, 'success');
+                log('   → Skipping Shor/lattice decrypt (not applicable)', 'success');
+                log('   → Ciphertext remains UNREADABLE (proof of PQC protection)', 'success');
+                log('══════════════════════════════════════════════════', 'success');
+                setText('qsAlgorithm', 'PQC Pass-Through');
+                setText('qsCurrentOp', '🛡️ PQC protected — decrypt skipped');
+                results.unshift(item.result);
+                renderQueue();
+                renderResults();
+                updateStats();
+            } finally {
+                processingItem = null;
+                decryptInProgress = false;
             }
+        }
+
+        // Auto-start: RSA → full Shor decrypt; PQC → pass-through only
+        async function autoStartDecryption() {
+            if (decryptInProgress || processingItem !== null) return;
+            const queued = decryptionQueue.filter(q => q.status === 'queued');
+            if (queued.length === 0) return;
+
+            // Prefer vulnerable RSA items first so plaintext proof appears quickly
+            const rsaItem = queued.find(q => (q.encryption || '').includes('RSA'));
+            const item = rsaItem || queued[0];
+
+            if (isPqcItem(item) && !(item.encryption || '').includes('RSA')) {
+                log(`🛡️ PQC pass-through (no decrypt): ${item.type} (${item.encryption})`, 'success');
+                await passThroughPqc(item);
+                return;
+            }
+
+            log(`⚛️ Auto-starting Shor decrypt on ${item.type} (${item.encryption})...`, 'quantum');
+            await startDecrypt(item.id);
         }
         
         // Force sync function - callable from Selenium test
@@ -976,17 +1064,24 @@
             try {
                 const response = await fetch('/api/hacker/gpu/status');
                 const data = await response.json();
-                gpuInfo = data.gpuInfo;
+                const info = data.gpuInfo || {};
+                gpuInfo = {
+                    gpuName: data.gpuName || info.gpuName || info.name,
+                    gpuMemory: data.gpuMemoryMB || info.memoryMB || info.gpuMemory,
+                    memoryMB: data.gpuMemoryMB || info.memoryMB,
+                    computeCapability: data.computeCapability || info.computeCapability
+                };
+                liveVramMb = data.gpuMemoryUsedMB ?? null;
                 
                 const gpuIndicator = document.getElementById('gpuIndicator');
                 if (data.gpuAvailable) {
                     document.getElementById('gpuName').textContent = 
-                        `${data.gpuName} - GPU Mode Active`;
-                    document.getElementById('gpuMemory').textContent = `${data.gpuMemoryMB} MB`;
+                        `${gpuInfo.gpuName} - GPU Mode Active`;
+                    document.getElementById('gpuMemory').textContent = `${gpuInfo.memoryMB} MB`;
                     document.getElementById('timeoutLimit').textContent = `${data.timeoutLimitHours} hour`;
                     gpuIndicator.style.background = '#00ff00';
-                    log('✅ GPU connected: ' + data.gpuName, 'success');
-                    log(`📊 GPU Memory: ${data.gpuMemoryMB} MB | Compute: ${data.computeCapability}`, 'info');
+                    log('✅ GPU connected: ' + gpuInfo.gpuName, 'success');
+                    log(`📊 GPU Memory: ${gpuInfo.memoryMB} MB | Compute: ${gpuInfo.computeCapability}`, 'info');
                 } else {
                     document.getElementById('gpuName').textContent = 
                         `⚠️ GPU UNAVAILABLE - SIMULATION MODE`;
@@ -1091,16 +1186,35 @@
         async function fetchHarvestedData() {
             try {
                 const response = await fetch('/api/hacker/harvested');
+                if (!response.ok) return;
                 const data = await response.json();
+                if (!Array.isArray(data)) return;
                 
                 data.forEach(item => {
-                    if (!decryptionQueue.find(q => q.documentId === item.documentId)) {
+                    const documentId = item.targetId || item.documentId || item.harvestId || item.id;
+                    const type = item.dataType || item.documentType || item.type || 'DOCUMENT';
+                    const encryption = formatAlgorithmName(
+                        item.algorithm || item.encryptionAlgorithm || item.encryption || 'RSA_2048'
+                    );
+                    // Do not reuse KEM algorithm as signature — prefer explicit sig fields
+                    let rawSig = item.signatureAlgorithm || item.signature || null;
+                    if (!rawSig && item.metadata) {
+                        try {
+                            const meta = typeof item.metadata === 'string' ? JSON.parse(item.metadata) : item.metadata;
+                            rawSig = meta.signatureAlgorithm || meta.signature || null;
+                        } catch (_) { /* ignore */ }
+                    }
+                    if (!rawSig) {
+                        rawSig = encryption.includes('ML-KEM') ? 'ML_DSA' : 'RSA_2048';
+                    }
+                    const signature = formatAlgorithmName(rawSig);
+                    if (!decryptionQueue.find(q => String(q.documentId) === String(documentId))) {
                         addToQueue({
-                            documentId: item.documentId || item.id,
-                            type: item.documentType || item.type,
-                            applicant: item.applicant,
-                            encryption: item.encryptionAlgorithm || item.encryption || 'RSA-2048',
-                            signature: item.signatureAlgorithm || item.signature || 'RSA-2048',
+                            documentId: documentId,
+                            type: type,
+                            applicant: item.originalSender || item.applicant || 'unknown',
+                            encryption: encryption,
+                            signature: signature,
                             encryptedData: item.encryptedPayload || generateHex(512),
                             signatureData: item.signatureData || generateHex(256),
                         });
@@ -1191,11 +1305,16 @@
             }
             
             container.innerHTML = decryptionQueue.map(item => {
-                const isRsa = item.encryption.includes('RSA');
-                const isPqc = item.encryption.includes('ML-KEM') || item.encryption.includes('ML-DSA') || item.encryption.includes('SLH-DSA');
+                const enc = item.encryption || 'RSA-2048';
+                const sig = item.signature || 'RSA-2048';
+                const isRsa = enc.includes('RSA');
+                const isPqc = enc.includes('ML-KEM') || enc.includes('ML-DSA') || enc.includes('SLH-DSA');
                 const isProcessing = item.status === 'processing';
+                const steps = Array.isArray(item.steps) ? item.steps : [];
+                const stepCount = Math.max(steps.length, 1);
+                const currentStep = Math.min(item.currentStep || 0, stepCount - 1);
                 
-                const timeInfo = DECRYPT_TIMES[item.encryption] || DECRYPT_TIMES['RSA-2048'];
+                const timeInfo = DECRYPT_TIMES[enc] || DECRYPT_TIMES['RSA-2048'];
                 const estSeconds = Math.floor((timeInfo.min + timeInfo.max) / 2000);
                 
                 // Calculate elapsed time for processing items
@@ -1217,7 +1336,7 @@
                 return `
                     <div class="queue-item ${statusClass}">
                         <div class="queue-header">
-                            <span>📄 ${item.type} | ${item.documentId}</span>
+                            <span>📄 ${item.type || 'DOCUMENT'} | ${item.documentId}</span>
                             <span style="color: ${item.status === 'completed' ? '#00ff00' : item.status === 'failed' ? '#ff0040' : item.status === 'processing' ? '#00ffff' : '#666'}">
                                 ${statusIcon} ${item.status.toUpperCase()} ${isProcessing ? `(${elapsedTime}s)` : ''}
                             </span>
@@ -1225,16 +1344,16 @@
                         <div class="queue-body">
                             <div class="cipher-info">
                                 <span>🔐 Encryption:</span>
-                                <span class="cipher-tag ${isPqc ? 'pqc' : (isRsa ? 'rsa' : 'aes')}">${item.encryption}</span>
+                                <span class="cipher-tag ${isPqc ? 'pqc' : (isRsa ? 'rsa' : 'aes')}">${enc}</span>
                                 <span>✍️ Signature:</span>
-                                <span class="cipher-tag ${item.signature.includes('ML-DSA') || item.signature.includes('SLH-DSA') ? 'pqc' : 'rsa'}">${item.signature}</span>
+                                <span class="cipher-tag ${sig.includes('ML-DSA') || sig.includes('SLH-DSA') ? 'pqc' : 'rsa'}">${sig}</span>
                             </div>
                             
                             ${isProcessing ? `
                                 <div style="margin: 8px 0; padding: 6px 10px; background: rgba(0,255,255,0.1); border-radius: 4px; font-size: 12px;">
                                     <strong>⚛️ Attack:</strong> ${attackType} | 
                                     <strong>🎮 GPU:</strong> ${gpuInfo?.gpuName || 'Simulation'} | 
-                                    <strong>💾 VRAM:</strong> ${gpuInfo?.gpuMemory || 'N/A'}
+                                    <strong>💾 VRAM:</strong> ${liveVramMb != null ? (liveVramMb + ' MB used') : (gpuInfo?.gpuMemory ? (gpuInfo.gpuMemory + ' MB') : 'N/A')}
                                 </div>
                             ` : ''}
                             
@@ -1242,22 +1361,22 @@
                                 <div class="progress-container">
                                     <div class="progress-label">
                                         <span style="max-width: 80%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                            ${item.steps[item.currentStep] || 'Initializing...'}
+                                            ${steps[currentStep] || 'Initializing...'}
                                         </span>
-                                        <span><strong>${item.currentStep + 1}/${item.steps.length}</strong> | ${item.progress}%</span>
+                                        <span><strong>${currentStep + 1}/${stepCount}</strong> | ${item.progress || 0}%</span>
                                     </div>
                                     <div class="progress-bar">
                                         <div class="progress-fill ${isProcessing ? 'quantum' : (isPqc ? '' : 'success')}" 
-                                             style="width: ${item.progress}%; ${item.status === 'failed' ? 'background: linear-gradient(90deg, #ff0040, #ff6600);' : ''}">
+                                             style="width: ${item.progress || 0}%; ${item.status === 'failed' ? 'background: linear-gradient(90deg, #ff0040, #ff6600);' : ''}">
                                         </div>
-                                        <span class="progress-text">${item.progress}%</span>
+                                        <span class="progress-text">${item.progress || 0}%</span>
                                     </div>
                                 </div>
                                 <div class="attack-steps" style="max-height: 200px; overflow-y: auto;">
-                                    ${item.steps.map((step, i) => `
-                                        <div class="step ${i < item.currentStep ? 'done' : (i === item.currentStep ? 'active' : '')}"
-                                             style="${i === item.currentStep ? 'background: rgba(0,255,255,0.2); font-weight: bold;' : ''}">
-                                            ${i < item.currentStep ? '✅' : (i === item.currentStep ? '▶️' : '⬜')} ${step}
+                                    ${steps.map((step, i) => `
+                                        <div class="step ${i < currentStep ? 'done' : (i === currentStep ? 'active' : '')}"
+                                             style="${i === currentStep ? 'background: rgba(0,255,255,0.2); font-weight: bold;' : ''}">
+                                            ${i < currentStep ? '✅' : (i === currentStep ? '▶️' : '⬜')} ${step}
                                         </div>
                                     `).join('')}
                                 </div>
@@ -1366,13 +1485,19 @@
                             </div>
                             <div class="decrypted-field">
                                 <span class="field-label">Attack Time:</span>
-                                <span class="field-value">${(result.attackTime / 1000).toFixed(1)}s</span>
+                                <span class="field-value">${result.attackTime ? (result.attackTime / 1000).toFixed(1) + 's' : 'n/a'}</span>
                             </div>
+                            ${result.plaintext ? `
+                                <div style="margin-top: 10px; padding: 10px; background: #1a0008; border: 1px solid #ff0040; border-radius: 4px;">
+                                    <div style="color: #ff0040; font-weight: bold; margin-bottom: 6px;">🔓 DECRYPTED PLAINTEXT (PROOF)</div>
+                                    <pre style="color: #ffcc00; white-space: pre-wrap; font-size: 11px; margin: 0; font-family: Consolas, monospace;">${result.plaintext.replace(/</g, '&lt;')}</pre>
+                                </div>
+                            ` : ''}
                             ${kemBroken ? `
                                 <p style="color: #ff6666; font-size: 0.8em; margin-top: 8px; padding: 8px; background: rgba(255,0,64,0.1); border-radius: 4px;">
                                     ⚠️ RSA-KEM broken by Shor's Algorithm!<br>
                                     🔓 AES-256 session key EXPOSED via decapsulation<br>
-                                    📄 All document data has been DECRYPTED
+                                    📄 All document data has been DECRYPTED — see plaintext above
                                 </p>
                             ` : ''}
                             ${sigBroken ? `
@@ -1389,11 +1514,15 @@
                         <div class="failed-result">
                             <h4 style="color: #00ff00;">🛡️ SCENARIO ${num}: ${scenario.name}</h4>
                             <div style="background: rgba(0,255,0,0.1); padding: 8px; border-radius: 4px; margin: 10px 0;">
-                                <strong style="color: #00ff00;">🟢 FULLY PROTECTED</strong>
+                                <strong style="color: #00ff00;">🟢 FULLY PROTECTED${result.passThrough ? ' (PASS-THROUGH)' : ''}</strong>
                             </div>
                             <div class="decrypted-field">
                                 <span class="field-label">Doc Type:</span>
                                 <span class="field-value" style="color: #00ff00;">${result.type}</span>
+                            </div>
+                            <div class="decrypted-field">
+                                <span class="field-label">Doc ID:</span>
+                                <span class="field-value" style="color: #00ff00;">${result.documentId || 'n/a'}</span>
                             </div>
                             <div class="decrypted-field">
                                 <span class="field-label">🔐 KEM:</span>
@@ -1401,16 +1530,16 @@
                             </div>
                             <div class="decrypted-field">
                                 <span class="field-label">🖊️ Signature:</span>
-                                <span class="field-value" style="color: #00ff00;">ML-DSA-65 (VALID ✅)</span>
+                                <span class="field-value" style="color: #00ff00;">${result.signature || 'ML-DSA-65'} (VALID ✅)</span>
                             </div>
                             <div class="decrypted-field">
                                 <span class="field-label">Attack:</span>
-                                <span class="field-value" style="color: #00ff00;">FAILED (Lattice problem unsolvable)</span>
+                                <span class="field-value" style="color: #00ff00;">${result.passThrough ? 'SKIPPED (PQC pass-through)' : 'FAILED (lattice hard)'}</span>
                             </div>
                             <p style="color: #00ff00; font-size: 0.8em; margin-top: 8px; padding: 8px; background: rgba(0,255,0,0.1); border-radius: 4px;">
-                                ✅ Post-Quantum Cryptography blocked quantum attack!<br>
-                                🔐 Module-LWE problem remains computationally hard<br>
-                                📊 No exponential quantum speedup exists for lattices
+                                ✅ Post-Quantum Cryptography — ciphertext NOT decrypted<br>
+                                🔐 No plaintext recovered (proof of protection)<br>
+                                📊 Shor's algorithm does not apply to ML-KEM/ML-DSA
                             </p>
                         </div>
                     `;
@@ -1424,26 +1553,41 @@
         }
         
         async function startDecrypt(itemId) {
+            if (decryptInProgress) return;
             const item = decryptionQueue.find(q => q.id == itemId);
             if (!item || item.status !== 'queued') return;
-            
+
+            const enc = item.encryption || 'RSA-2048';
+            const sig = item.signature || 'RSA-2048';
+            item.encryption = enc;
+            item.signature = sig;
+            const isPqc = isPqcItem(item) && !enc.includes('RSA');
+            const isRsa = enc.includes('RSA');
+            const isAes = enc.includes('AES');
+
+            // PQC: pass-through only — do NOT run lattice decrypt simulation
+            if (isPqc) {
+                await passThroughPqc(item);
+                return;
+            }
+
+            decryptInProgress = true;
             item.status = 'processing';
             item.startTime = Date.now();
+            item.progress = 5;
+            item.currentStep = 0;
             processingItem = item;
-            
-            const isPqc = item.encryption.includes('ML-KEM') || item.encryption.includes('ML-DSA') || item.encryption.includes('SLH-DSA');
-            const isRsa = item.encryption.includes('RSA');
-            const isAes = item.encryption.includes('AES');
-            
+
+            try {
             // Clear previous quantum logs for fresh display
             window.displayedQuantumLogs = new Set();
-            document.getElementById('qsStepProgress').style.display = 'none';
-            document.getElementById('qsCurrentOp').textContent = 'Initializing quantum attack...';
+            setStyle('qsStepProgress', 'display', 'none');
+            setText('qsCurrentOp', 'Initializing quantum attack...');
             
             // Select appropriate attack steps with more detail
             if (isRsa) {
                 item.steps = [...SHOR_STEPS];
-                const keyBits = item.encryption.includes('4096') ? 4096 : 2048;
+                const keyBits = enc.includes('4096') ? 4096 : 2048;
                 const qubits = 2 * keyBits + 3;
                 log(`══════════════════════════════════════════════════`, 'quantum');
                 log(`⚛️ SHOR'S ALGORITHM - RSA-${keyBits} QUANTUM ATTACK`, 'quantum');
@@ -1464,8 +1608,8 @@
                 log(`   • State vector: 2^${Math.min(qubits, 28)} complex amplitudes`, 'info');
                 log(`   • GPU VRAM: ~${Math.round(Math.pow(2, Math.min(qubits, 20)) * 16 / 1024 / 1024)} MB`, 'info');
                 log(`----------------------------------------`, 'info');
-                document.getElementById('qsAlgorithm').textContent = "Shor's Algorithm";
-                document.getElementById('qsQubits').textContent = `~${qubits}`;
+                setText('qsAlgorithm', "Shor's Algorithm");
+                setText('qsQubits', `~${qubits}`);
             } else if (isAes) {
                 item.steps = [...GROVER_STEPS];
                 const keyBits = item.encryption.includes('256') ? 256 : 128;
@@ -1486,35 +1630,19 @@
                 log(`   • Iterations: π/4 × √(2^${keyBits}) ≈ 2^${keyBits/2 - 1}`, 'info');
                 log(`   • Still computationally expensive for AES-256!`, 'warn');
                 log(`----------------------------------------`, 'info');
-                document.getElementById('qsAlgorithm').textContent = "Grover's Search";
-                document.getElementById('qsQubits').textContent = `~${keyBits}`;
+                setText('qsAlgorithm', "Grover's Search");
+                setText('qsQubits', `~${keyBits}`);
             } else {
-                item.steps = [...LATTICE_STEPS];
-                log(`══════════════════════════════════════════════════`, 'quantum');
-                log(`🛡️ LATTICE ATTACK - ${item.encryption} (PQC)`, 'quantum');
-                log(`══════════════════════════════════════════════════`, 'quantum');
-                log(`🔐 Target: ${item.encryption} (Post-Quantum Cryptography)`, 'info');
-                log(`📊 Security: Based on lattice hard problems (LWE/MLWE)`, 'info');
-                log(`📐 Mathematical Foundation:`, 'info');
-                log(`   • Module-LWE: b = As + e over Rq = Zq[X]/(X^256+1)`, 'info');
-                log(`   • Lattice dimension: n=256, modulus q=3329`, 'info');
-                log(`   • Error distribution: centered binomial η=2`, 'info');
-                log(`⚛️ Quantum Attack Attempt:`, 'warn');
-                log(`   • BKZ-β lattice reduction (best known attack)`, 'warn');
-                log(`   • Grover-enhanced enumeration (only √ speedup)`, 'warn');
-                log(`   • NO exponential quantum speedup for lattices!`, 'error');
-                log(`📊 Why PQC is Quantum-Resistant:`, 'success');
-                log(`   • Classical security: 192+ bits (NIST Level 3)`, 'success');
-                log(`   • Quantum security: ~183 bits (still exponential)`, 'success');
-                log(`   • Attack cost: O(2^183) operations (infeasible)`, 'success');
-                log(`🛡️ EXPECTED RESULT: ATTACK WILL FAIL!`, 'success');
-                log(`----------------------------------------`, 'info');
-                document.getElementById('qsAlgorithm').textContent = "Lattice Attack";
-                document.getElementById('qsQubits').textContent = 'N/A (classical+quantum hybrid)';
+                // Fallback: treat unknown as protected pass-through
+                decryptInProgress = false;
+                processingItem = null;
+                item.status = 'queued';
+                await passThroughPqc(item);
+                return;
             }
             
             const timeInfo = DECRYPT_TIMES[item.encryption] || DECRYPT_TIMES['RSA-2048'];
-            const totalTime = timeInfo.min + Math.random() * (timeInfo.max - timeInfo.min);
+            const totalTime = Math.min(timeInfo.min + Math.random() * (timeInfo.max - timeInfo.min), 12000);
             const stepTime = totalTime / item.steps.length;
             
             log(`⏱️ Estimated time: ${Math.round(totalTime/1000)}s | Steps: ${item.steps.length}`, 'info');
@@ -1524,80 +1652,64 @@
             renderQueue();
             updateStats();
             
-            // Trigger REAL quantum simulation on Python service (non-blocking)
-            triggerRealQuantumSimulation(item, isRsa, isAes, isPqc);
+            // Await real GPU Shor/Grover so factors appear in the proof
+            const gpuResult = await triggerRealQuantumSimulation(item, isRsa, isAes, false);
             
             // Simulate decryption progress with detailed logging
             for (let i = 0; i < item.steps.length; i++) {
-                // Fetch backend logs more frequently during processing
-                if (i % 2 === 0) {
-                    await fetchQuantumServiceLogs();
+                if (i % 3 === 0) {
+                    fetchQuantumServiceLogs().catch(() => {});
                 }
                 
-                if (isPqc && i >= item.steps.length - 2) {
-                    // PQC attack fails
-                    item.currentStep = i;
-                    item.progress = Math.min(95, Math.floor((i / item.steps.length) * 100));
-                    renderQueue();
-                    log(`[Step ${i+1}/${item.steps.length}] ${item.steps[i]}`, isPqc && i >= item.steps.length - 3 ? 'error' : 'quantum');
-                    await sleep(stepTime);
-                } else {
-                    item.currentStep = i;
-                    item.progress = Math.floor((i / item.steps.length) * 100);
-                    renderQueue();
-                    
-                    // Show elapsed time and ETA
-                    const elapsed = Math.round((Date.now() - item.startTime) / 1000);
-                    const eta = Math.round(((item.steps.length - i) * stepTime) / 1000);
-                    
-                    log(`[Step ${i+1}/${item.steps.length}] ${item.steps[i]} | ⏱️ ${elapsed}s elapsed, ~${eta}s remaining`, 'quantum');
-                    await sleep(stepTime);
-                }
+                item.currentStep = i;
+                item.progress = Math.max(5, Math.min(99, Math.floor(((i + 1) / item.steps.length) * 100)));
+                renderQueue();
+                
+                const elapsed = Math.round((Date.now() - item.startTime) / 1000);
+                const eta = Math.round(((item.steps.length - i) * stepTime) / 1000);
+                log(`[Step ${i+1}/${item.steps.length}] ${item.steps[i]} | ⏱️ ${elapsed}s elapsed, ~${eta}s remaining`, 'quantum');
+                await sleep(Math.min(stepTime, 350));
             }
             
-            // Final log fetch
             await fetchQuantumServiceLogs();
             
-            // Complete
             item.endTime = Date.now();
             item.progress = 100;
             const totalElapsed = Math.round((item.endTime - item.startTime) / 1000);
-            
-            if (isPqc) {
-                item.status = 'failed';
-                item.result = {
-                    success: false,
-                    documentId: item.documentId,
-                    type: item.type,
-                    encryption: item.encryption,
-                    signature: item.signature,
-                    message: 'Post-Quantum Cryptography resisted attack',
-                };
-                log(`----------------------------------------`, 'info');
-                log(`🛡️ ATTACK FAILED after ${totalElapsed}s: ${item.encryption} is quantum-resistant!`, 'success');
-                log(`📊 PQC algorithms successfully defended against quantum attack`, 'success');
-                document.getElementById('qsCurrentOp').textContent = '🛡️ PQC DEFENSE SUCCESSFUL - Attack blocked!';
-            } else {
-                item.status = 'completed';
-                item.result = {
-                    success: true,
-                    documentId: item.documentId,
-                    type: item.type,
-                    applicant: item.applicant,
-                    encryption: item.encryption,
-                    signature: item.signature,
-                    attackTime: item.endTime - item.startTime,
-                    signatureForged: item.signature && !item.signature.includes('ML-DSA'),
-                };
-                log(`----------------------------------------`, 'info');
-                log(`💔 DECRYPTED in ${totalElapsed}s: ${item.type} - ${item.encryption} BROKEN!`, 'error');
-                if (item.result.signatureForged) {
-                    log(`✍️ SIGNATURE FORGED: ${item.signature} key recovered by Shor's Algorithm!`, 'error');
-                } else {
-                    log(`✅ SIGNATURE PROTECTED: ${item.signature} resisted quantum attack`, 'success');
-                }
-                document.getElementById('qsCurrentOp').textContent = '💔 RSA BROKEN - Private key recovered!';
+
+            const factors = gpuResult?.result || gpuResult || {};
+            const plaintext = buildDemoPlaintext(item, factors);
+
+            item.status = 'completed';
+            item.result = {
+                success: true,
+                documentId: item.documentId,
+                type: item.type,
+                applicant: item.applicant,
+                encryption: item.encryption,
+                signature: item.signature,
+                attackTime: item.endTime - item.startTime,
+                signatureForged: item.signature && !item.signature.includes('ML-DSA'),
+                plaintext: plaintext,
+                factors: factors
+            };
+            log(`----------------------------------------`, 'info');
+            log(`💔 DECRYPTED in ${totalElapsed}s: ${item.type} - ${item.encryption} BROKEN!`, 'error');
+            if (factors.factor_p || factors.p) {
+                log(`🔑 RSA FACTORS: p=${factors.factor_p || factors.p}  q=${factors.factor_q || factors.q}`, 'error');
             }
+            if (gpuResult?.verdict) {
+                log(`📡 GPU verdict: ${gpuResult.verdict}`, 'error');
+            }
+            log(`🔓 ========== DECRYPTED PLAINTEXT OUTPUT ==========`, 'error');
+            plaintext.split('\n').forEach(line => log(line, 'error'));
+            log(`🔓 ========== END PLAINTEXT (PROOF IT WORKS) ==========`, 'error');
+            if (item.result.signatureForged) {
+                log(`✍️ SIGNATURE FORGED: ${item.signature} key recovered by Shor's Algorithm!`, 'error');
+            } else if (item.signature && item.signature.includes('ML-DSA')) {
+                log(`✅ SIGNATURE PROTECTED: ${item.signature} resisted quantum attack`, 'success');
+            }
+            setText('qsCurrentOp', '💔 RSA BROKEN — plaintext recovered (see Results + console)');
             
             results.unshift(item.result);
             processingItem = null;
@@ -1610,10 +1722,25 @@
             if (isRsa && item.signature && !item.signature.includes('ML-DSA')) {
                 await decryptSignature(item);
             }
+        } catch (err) {
+            console.error('Decrypt failed', err);
+            if (item) {
+                item.status = 'failed';
+                item.progress = 100;
+            }
+            processingItem = null;
+            log(`Decrypt error: ${err.message || err}`, 'error');
+        } finally {
+            decryptInProgress = false;
+        }
         }
         
-        // Trigger real quantum simulation on Python service
+        // Trigger real quantum simulation on Python service (RSA/AES only — PQC uses pass-through)
         async function triggerRealQuantumSimulation(item, isRsa, isAes, isPqc) {
+            if (isPqc) {
+                log('🛡️ PQC — skipping lattice GPU attack (pass-through)', 'success');
+                return null;
+            }
             try {
                 let endpoint = '';
                 let payload = {};
@@ -1624,7 +1751,7 @@
                         key_size: item.encryption.includes('4096') ? 4096 : 2048,
                         document_id: item.documentId
                     };
-                    log('📡 Sending RSA attack request to cuQuantum GPU service...', 'info');
+                    log('📡 Sending RSA Shor attack to cuQuantum GPU service...', 'info');
                 } else if (isAes) {
                     endpoint = '/api/quantum/grover';
                     payload = { 
@@ -1632,35 +1759,41 @@
                         document_id: item.documentId
                     };
                     log('📡 Sending Grover search request to cuQuantum GPU service...', 'info');
-                } else if (isPqc) {
-                    endpoint = '/api/quantum/attack/lattice';
-                    payload = { 
-                        algorithm: item.encryption,
-                        security_level: 3,
-                        document_id: item.documentId
-                    };
-                    log('📡 Sending lattice attack request to cuQuantum GPU service...', 'info');
+                } else {
+                    return null;
                 }
                 
-                if (endpoint) {
-                    // Non-blocking call to trigger the real simulation
-                    fetch(`${QUANTUM_SERVICE_URL}${endpoint}`, {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 45000);
+                try {
+                    const response = await fetch(`${QUANTUM_SERVICE_URL}${endpoint}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    }).then(async response => {
-                        if (response.ok) {
-                            const result = await response.json();
-                            log(`📡 GPU Simulation complete: ${result.verdict || result.algorithm || 'Done'}`, 'success');
-                            console.log('Quantum service result:', result);
-                        }
-                    }).catch(e => {
-                        console.log('Quantum service call failed (using simulation):', e);
+                        body: JSON.stringify(payload),
+                        signal: controller.signal
                     });
+                    if (response.ok) {
+                        const result = await response.json();
+                        log(`📡 GPU Simulation complete: ${result.verdict || result.algorithm || 'Done'}`, 'success');
+                        if (result.result) {
+                            const r = result.result;
+                            if (r.factor_p || r.p) {
+                                log(`📡 GPU factors: p=${r.factor_p || r.p} q=${r.factor_q || r.q}`, 'error');
+                            }
+                            if (r.modulus_n || r.n) {
+                                log(`📡 GPU modulus N=${r.modulus_n || r.n}`, 'info');
+                            }
+                        }
+                        return result;
+                    }
+                    log(`📡 GPU service HTTP ${response.status} — continuing with local Shor sim`, 'warn');
+                } finally {
+                    clearTimeout(timeout);
                 }
             } catch (e) {
-                console.log('Could not trigger real quantum simulation:', e);
+                log(`📡 GPU call unavailable (${e.name || 'error'}) — local Shor sim continues`, 'warn');
             }
+            return null;
         }
         
         async function decryptSignature(item) {
@@ -1670,33 +1803,34 @@
         }
         
         async function startDecryptAll() {
-            const vulnerable = decryptionQueue.filter(q => 
-                q.status === 'queued' && 
-                (q.encryption.includes('RSA') || q.encryption.includes('AES'))
-            );
-            
-            if (vulnerable.length === 0) {
-                log('No vulnerable items to decrypt', 'warn');
+            const queued = decryptionQueue.filter(q => q.status === 'queued');
+            if (queued.length === 0) {
+                log('No queued items', 'warn');
                 return;
             }
-            
-            log(`Starting batch decryption of ${vulnerable.length} vulnerable items...`, 'info');
-            
-            for (const item of vulnerable) {
+
+            const rsaOrAes = queued.filter(q =>
+                (q.encryption || '').includes('RSA') || (q.encryption || '').includes('AES')
+            );
+            const pqcItems = queued.filter(q => isPqcItem(q) && !(q.encryption || '').includes('RSA'));
+
+            log(`Batch: ${rsaOrAes.length} RSA/AES decrypt + ${pqcItems.length} PQC pass-through...`, 'info');
+
+            for (const item of rsaOrAes) {
                 await startDecrypt(item.id);
             }
-            
-            log('Batch decryption complete!', 'success');
+            for (const item of pqcItems) {
+                await passThroughPqc(item);
+            }
+
+            log('Batch complete — check Results panel for DECRYPTED PLAINTEXT proof!', 'success');
         }
         
         function updateStats() {
-            document.getElementById('queueCount').textContent = decryptionQueue.length;
-            document.getElementById('processingCount').textContent = 
-                decryptionQueue.filter(q => q.status === 'processing').length;
-            document.getElementById('decryptedCount').textContent = 
-                results.filter(r => r.success).length;
-            document.getElementById('protectedCount').textContent = 
-                results.filter(r => !r.success).length;
+            setText('queueCount', decryptionQueue.length);
+            setText('processingCount', decryptionQueue.filter(q => q.status === 'processing').length);
+            setText('decryptedCount', results.filter(r => r.success).length);
+            setText('protectedCount', results.filter(r => !r.success).length);
             
             // Calculate estimated time for remaining
             const remaining = decryptionQueue.filter(q => q.status === 'queued');
@@ -1709,9 +1843,9 @@
             if (totalMs > 0) {
                 const mins = Math.floor(totalMs / 60000);
                 const secs = Math.floor((totalMs % 60000) / 1000);
-                document.getElementById('estTime').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+                setText('estTime', `${mins}:${secs.toString().padStart(2, '0')}`);
             } else {
-                document.getElementById('estTime').textContent = '--:--';
+                setText('estTime', '--:--');
             }
         }
         

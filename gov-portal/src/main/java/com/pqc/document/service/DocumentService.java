@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 /**
@@ -27,6 +28,8 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class DocumentService {
+
+    private static final String DOCUMENT_NOT_FOUND = "Document not found: ";
 
     private final DocumentRepository documentRepository;
     private final UserRepository userRepository;
@@ -70,7 +73,7 @@ public class DocumentService {
         log.info("Signing document {} by user {}", documentId, signerUserId);
 
         Document document = documentRepository.findByDocumentId(documentId)
-                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+                .orElseThrow(() -> new IllegalArgumentException(DOCUMENT_NOT_FOUND + documentId));
 
         if (document.getSignature() != null) {
             throw new IllegalStateException("Document is already signed");
@@ -102,7 +105,7 @@ public class DocumentService {
         document.setSignature(signatureResult.getSignature());
         document.setSignatureAlgorithm(algorithm);
         document.setSigner(signer);
-        document.setSignedAt(LocalDateTime.now());
+        document.setSignedAt(LocalDateTime.now(ZoneOffset.UTC));
         document.setStatus(DocumentStatus.SIGNED);
 
         return documentRepository.save(document);
@@ -115,7 +118,7 @@ public class DocumentService {
         log.info("Verifying document: {}", documentId);
 
         Document document = documentRepository.findByDocumentId(documentId)
-                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+                .orElseThrow(() -> new IllegalArgumentException(DOCUMENT_NOT_FOUND + documentId));
 
         if (document.getSignature() == null) {
             return VerificationResult.failed("Document is not signed");
@@ -162,7 +165,7 @@ public class DocumentService {
     @Transactional
     public Document approveDocument(String documentId, String approverUserId) {
         Document document = documentRepository.findByDocumentId(documentId)
-                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+                .orElseThrow(() -> new IllegalArgumentException(DOCUMENT_NOT_FOUND + documentId));
 
         if (document.getStatus() != DocumentStatus.SIGNED) {
             throw new IllegalStateException("Document must be signed before approval");
@@ -180,7 +183,7 @@ public class DocumentService {
     @Transactional
     public Document rejectDocument(String documentId, String reason) {
         Document document = documentRepository.findByDocumentId(documentId)
-                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+                .orElseThrow(() -> new IllegalArgumentException(DOCUMENT_NOT_FOUND + documentId));
 
         document.setStatus(DocumentStatus.REJECTED);
         log.info("Document {} rejected: {}", documentId, reason);
@@ -193,7 +196,7 @@ public class DocumentService {
      */
     public Document getDocument(String documentId) {
         return documentRepository.findByDocumentId(documentId)
-                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+                .orElseThrow(() -> new IllegalArgumentException(DOCUMENT_NOT_FOUND + documentId));
     }
 
     /**

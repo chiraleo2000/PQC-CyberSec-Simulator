@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -75,7 +76,7 @@ public class TransactionHarvester {
         log.warn("🎯 HARVESTING: Intercepting encrypted transaction logs from network traffic...");
         
         InterceptionResult result = new InterceptionResult();
-        result.setTimestamp(LocalDateTime.now());
+        result.setTimestamp(LocalDateTime.now(ZoneOffset.UTC));
         result.setTargetUrl(govPortalUrl + "/api/transactions");
         
         try {
@@ -109,7 +110,7 @@ public class TransactionHarvester {
                         itx.setEncryptionAlgorithm(encryptionAlgo);
                         itx.setSignatureAlgorithm(signatureAlgo);
                         itx.setStatus(String.valueOf(tx.get("status")));
-                        itx.setInterceptedAt(LocalDateTime.now());
+                        itx.setInterceptedAt(LocalDateTime.now(ZoneOffset.UTC));
                         
                         // Simulate capturing encrypted payload (KEM)
                         byte[] encryptedPayload = generateSimulatedEncryptedData(encryptionAlgo);
@@ -163,7 +164,7 @@ public class TransactionHarvester {
                 harvestedData.size());
         
         QuantumAttackReport report = new QuantumAttackReport();
-        report.setAttackStartTime(LocalDateTime.now());
+        report.setAttackStartTime(LocalDateTime.now(ZoneOffset.UTC));
         report.setGpuInfo(quantumSimulator.getGpuInfo());
         report.setTotalTargets(harvestedData.size());
         
@@ -191,7 +192,7 @@ public class TransactionHarvester {
         report.setRsaKeysBroken(rsaEncryptionBroken);
         report.setRsaSignaturesForged(rsaSignatureForged);
         report.setPqcProtectedCount(pqcEncryptionProtected + pqcSignatureProtected);
-        report.setAttackEndTime(LocalDateTime.now());
+        report.setAttackEndTime(LocalDateTime.now(ZoneOffset.UTC));
         
         // Generate attack summary
         int totalBroken = rsaEncryptionBroken + rsaSignatureForged;
@@ -499,7 +500,7 @@ public class TransactionHarvester {
                     .intendedRecipient("gov-portal")
                     .metadata(objectMapper.writeValueAsString(tx))
                     .status(HarvestedData.HarvestStatus.HARVESTED)
-                    .harvestedAt(LocalDateTime.now())
+                    .harvestedAt(LocalDateTime.now(ZoneOffset.UTC))
                     .build();
             
             harvestedDataRepository.save(harvested);

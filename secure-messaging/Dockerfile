@@ -1,4 +1,4 @@
-FROM maven:3.9-eclipse-temurin-21 AS builder
+FROM maven:3.9-eclipse-temurin-25 AS builder
 WORKDIR /app
 
 # Copy parent pom and all module poms first for dependency resolution
@@ -25,7 +25,7 @@ COPY secure-messaging/src secure-messaging/src
 # Build secure-messaging with Spring Boot repackage
 RUN mvn package spring-boot:repackage -pl secure-messaging -DskipTests -q
 
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 COPY --from=builder /app/secure-messaging/target/*.jar app.jar
 EXPOSE 8182

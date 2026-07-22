@@ -6,9 +6,6 @@ import org.bouncycastle.jcajce.SecretKeyWithEncapsulation;
 import org.bouncycastle.jcajce.spec.KEMExtractSpec;
 import org.bouncycastle.jcajce.spec.KEMGenerateSpec;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.pqc.jcajce.provider.BouncyCastlePQCProvider;
-import org.bouncycastle.pqc.jcajce.spec.DilithiumParameterSpec;
-import org.bouncycastle.pqc.jcajce.spec.KyberParameterSpec;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -43,7 +40,8 @@ import java.util.Base64;
 public class PqcCryptoService {
 
     private static final String BC_PROVIDER = "BC";
-    private static final String BCPQC_PROVIDER = "BCPQC";
+    private static final String ML_DSA_ALG = "ML-DSA-65";
+    private static final String ML_KEM_ALG = "ML-KEM-768";
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
 
@@ -58,11 +56,8 @@ public class PqcCryptoService {
             if (Security.getProvider("BC") == null) {
                 Security.addProvider(new BouncyCastleProvider());
             }
-            if (Security.getProvider("BCPQC") == null) {
-                Security.addProvider(new BouncyCastlePQCProvider());
-            }
             providersRegistered = true;
-            log.info("Bouncy Castle providers registered for PQC cryptography");
+            log.info("Bouncy Castle provider registered for PQC cryptography (ML-DSA/ML-KEM)");
         }
     }
 
@@ -84,9 +79,8 @@ public class PqcCryptoService {
      * @return KeyPairResult containing public and private keys
      */
     public KeyPairResult generateMLDSAKeyPair() throws GeneralSecurityException {
-        log.debug("Generating ML-DSA (Dilithium3) key pair...");
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("Dilithium", BCPQC_PROVIDER);
-        kpg.initialize(DilithiumParameterSpec.dilithium3, new SecureRandom());
+        log.debug("Generating ML-DSA-65 key pair...");
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance(ML_DSA_ALG, BC_PROVIDER);
         KeyPair keyPair = kpg.generateKeyPair();
 
         byte[] publicKey = keyPair.getPublic().getEncoded();
@@ -108,7 +102,7 @@ public class PqcCryptoService {
     public SignatureResult signWithMLDSA(byte[] data, PrivateKey privateKey) throws GeneralSecurityException {
         long start = System.nanoTime();
 
-        Signature signer = Signature.getInstance("Dilithium", BCPQC_PROVIDER);
+        Signature signer = Signature.getInstance(ML_DSA_ALG, BC_PROVIDER);
         signer.initSign(privateKey, new SecureRandom());
         signer.update(data);
         byte[] signature = signer.sign();
@@ -130,7 +124,7 @@ public class PqcCryptoService {
      */
     public boolean verifyMLDSASignature(byte[] data, byte[] signature, PublicKey publicKey)
             throws GeneralSecurityException {
-        Signature verifier = Signature.getInstance("Dilithium", BCPQC_PROVIDER);
+        Signature verifier = Signature.getInstance(ML_DSA_ALG, BC_PROVIDER);
         verifier.initVerify(publicKey);
         verifier.update(data);
         boolean valid = verifier.verify(signature);
@@ -147,9 +141,8 @@ public class PqcCryptoService {
      * @return KeyPairResult containing public and private keys
      */
     public KeyPairResult generateMLKEMKeyPair() throws GeneralSecurityException {
-        log.debug("Generating ML-KEM (Kyber768) key pair...");
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("Kyber", BCPQC_PROVIDER);
-        kpg.initialize(KyberParameterSpec.kyber768, new SecureRandom());
+        log.debug("Generating ML-KEM-768 key pair...");
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance(ML_KEM_ALG, BC_PROVIDER);
         KeyPair keyPair = kpg.generateKeyPair();
 
         byte[] publicKey = keyPair.getPublic().getEncoded();
@@ -171,7 +164,7 @@ public class PqcCryptoService {
     public EncapsulationResult encapsulateMLKEM(PublicKey publicKey) throws GeneralSecurityException {
         log.debug("Encapsulating shared secret with ML-KEM (Kyber)...");
 
-        KeyGenerator keyGen = KeyGenerator.getInstance("Kyber", BCPQC_PROVIDER);
+        KeyGenerator keyGen = KeyGenerator.getInstance(ML_KEM_ALG, BC_PROVIDER);
         keyGen.init(new KEMGenerateSpec(publicKey, "AES"), new SecureRandom());
         SecretKeyWithEncapsulation secretKey = (SecretKeyWithEncapsulation) keyGen.generateKey();
 
@@ -196,7 +189,7 @@ public class PqcCryptoService {
             throws GeneralSecurityException {
         log.debug("Decapsulating shared secret with ML-KEM (Kyber)...");
 
-        KeyGenerator keyGen = KeyGenerator.getInstance("Kyber", BCPQC_PROVIDER);
+        KeyGenerator keyGen = KeyGenerator.getInstance(ML_KEM_ALG, BC_PROVIDER);
         keyGen.init(new KEMExtractSpec(privateKey, encapsulation, "AES"), new SecureRandom());
         SecretKey sharedSecret = keyGen.generateKey();
 
@@ -353,7 +346,7 @@ public class PqcCryptoService {
      */
     public KeyPair loadMLDSAKeyPair(byte[] publicKeyBytes, byte[] privateKeyBytes)
             throws GeneralSecurityException {
-        KeyFactory keyFactory = KeyFactory.getInstance("Dilithium", BCPQC_PROVIDER);
+        KeyFactory keyFactory = KeyFactory.getInstance(ML_DSA_ALG, BC_PROVIDER);
         PublicKey publicKey = keyFactory.generatePublic(
                 new java.security.spec.X509EncodedKeySpec(publicKeyBytes));
         PrivateKey privateKey = keyFactory.generatePrivate(
@@ -366,7 +359,7 @@ public class PqcCryptoService {
      */
     public KeyPair loadMLKEMKeyPair(byte[] publicKeyBytes, byte[] privateKeyBytes)
             throws GeneralSecurityException {
-        KeyFactory keyFactory = KeyFactory.getInstance("Kyber", BCPQC_PROVIDER);
+        KeyFactory keyFactory = KeyFactory.getInstance(ML_KEM_ALG, BC_PROVIDER);
         PublicKey publicKey = keyFactory.generatePublic(
                 new java.security.spec.X509EncodedKeySpec(publicKeyBytes));
         PrivateKey privateKey = keyFactory.generatePrivate(

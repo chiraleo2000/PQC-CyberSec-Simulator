@@ -14,10 +14,10 @@
 # Works on: Windows (direct), Linux/Mac (direct), Docker (--gpus all)
 # =============================================================================
 
-# GPU Acceleration (NVIDIA CUDA 13.x)
+# GPU Acceleration (NVIDIA CUDA 13.x) — cupy-cuda13x ONLY (do not install cupy-cuda12x)
 # CuPy: GPU-accelerated array operations for quantum state simulation
 cupy-cuda13x>=13.4.0
-# cuQuantum: NVIDIA SDK for quantum circuit simulation on GPU
+# cuQuantum: NVIDIA SDK for quantum circuit simulation on GPU (optional; CuPy-only path works without it)
 cuquantum-python-cu13>=24.11.0
 
 # Web service framework

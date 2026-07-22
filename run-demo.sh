@@ -199,14 +199,26 @@ echo -e "${BLUE}[1/6] Checking Prerequisites and Determining Infrastructure...${
 # --- JDK detection (require javac, not just java) ---
 if ! command -v javac &> /dev/null; then
     echo -e "${RED}   [ERROR] javac not found! You are running a JRE, not a JDK.${NC}"
-    echo -e "${RED}   Please install JDK 21+ and set JAVA_HOME to the JDK directory.${NC}"
+    echo -e "${RED}   Please install JDK 25+ and set JAVA_HOME to the JDK directory.${NC}"
     exit 1
 fi
 if ! command -v java &> /dev/null; then
-    echo -e "${RED}   [ERROR] Java is not installed! Please install JDK 21+.${NC}"
+    echo -e "${RED}   [ERROR] Java is not installed! Please install JDK 25+.${NC}"
     exit 1
 fi
 echo -e "   ${GREEN}[OK] JDK found ($(javac -version 2>&1))${NC}"
+
+# Prefer CUDA 13.3 toolkit with headers for CuPy JIT
+if [ -f "/usr/local/cuda-13.3/include/cuda.h" ]; then
+    export CUDA_PATH="/usr/local/cuda-13.3"
+elif [ -f "/usr/local/cuda/include/cuda.h" ]; then
+    export CUDA_PATH="/usr/local/cuda"
+fi
+if [ -n "${CUDA_PATH:-}" ]; then
+    export CUDA_HOME="$CUDA_PATH"
+    export PATH="$CUDA_PATH/bin:$PATH"
+    echo -e "   ${GREEN}[OK] CUDA_PATH=$CUDA_PATH${NC}"
+fi
 
 # Check Maven
 if ! command -v mvn &> /dev/null; then
@@ -284,9 +296,13 @@ fi
 
 # Clean up any existing processes and GPU memory before starting
 echo -e "   ${CYAN}Cleaning up existing processes and GPU memory...${NC}"
+if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
+    (cd "$SCRIPT_DIR" && docker compose down >/dev/null 2>&1) || true
+    echo -e "   ${GREEN}[OK] Docker compose stopped for this project${NC}"
+fi
 pkill -f "spring-boot:run" 2>/dev/null || true
 pkill -f "quantum_service.py" 2>/dev/null || true
-for port in 8181 8183 8184; do
+for port in 8181 8182 8183 8184; do
     pid=$(lsof -ti:$port 2>/dev/null)
     [ -n "$pid" ] && kill -9 $pid 2>/dev/null || true
 done

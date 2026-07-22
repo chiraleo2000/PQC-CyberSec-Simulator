@@ -55,9 +55,11 @@ public class InterceptionService {
     private boolean autoHarvest;
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
             .build();
+
+    private volatile boolean messagingUnavailableLogged = false;
 
     /**
      * Intercept a specific document by ID.
@@ -174,8 +176,15 @@ public class InterceptionService {
                     return InterceptionResult.failure("Message not accessible: " + response.code());
                 }
             }
+        } catch (java.net.ConnectException e) {
+            if (!messagingUnavailableLogged) {
+                log.warn("Messaging service unavailable at {} — skipping message intercept (optional for gov demo)",
+                        messagingServiceUrl);
+                messagingUnavailableLogged = true;
+            }
+            return InterceptionResult.failure("Messaging service unavailable");
         } catch (Exception e) {
-            log.error("Interception failed", e);
+            log.warn("Interception soft-fail: {}", e.getMessage());
             return InterceptionResult.failure("Interception failed: " + e.getMessage());
         }
     }
@@ -218,8 +227,11 @@ public class InterceptionService {
                     }
                 }
             }
+        } catch (java.net.ConnectException e) {
+            log.warn("Messaging service unavailable at {} — skipping message harvest (gov-portal demo does not require it)",
+                    messagingServiceUrl);
         } catch (Exception e) {
-            log.error("Bulk harvest failed", e);
+            log.warn("Bulk harvest soft-fail (messaging optional): {}", e.getMessage());
         }
 
         return BulkHarvestResult.builder()

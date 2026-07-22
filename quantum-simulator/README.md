@@ -19,18 +19,19 @@ This service uses NVIDIA cuQuantum SDK and CuPy to perform **actual quantum simu
 
 ### Software
 - Python 3.10 or newer
-- CUDA Toolkit 12.x
-- cuQuantum SDK 24.03.0 or newer
+- CUDA Toolkit 13.3 (must include `include/cuda.h`)
+- CuPy `cupy-cuda13x` (do not install `cupy-cuda12x`)
+- cuQuantum SDK optional (`cuquantum-python-cu13`)
 
 ## Installation
 
 ### Option 1: Automatic (Recommended)
 ```batch
 # Windows
-start-quantum.bat
+.\run-demo.bat
 
 # Linux/Mac
-./start-quantum.sh
+./run-demo.sh
 ```
 
 ### Option 2: Manual Installation
@@ -40,12 +41,9 @@ python -m venv venv
 source venv/bin/activate  # Linux/Mac
 venv\Scripts\activate     # Windows
 
-# Install CPU dependencies (always works)
-pip install numpy scipy sympy flask flask-cors requests
-
-# Install GPU dependencies (requires CUDA 12.x)
-pip install cupy-cuda12x
-pip install cuquantum-python-cu12
+# Install dependencies (CUDA 13.x only)
+pip uninstall -y cupy-cuda12x 2>/dev/null || true
+pip install -r requirements.txt
 ```
 
 ## API Endpoints

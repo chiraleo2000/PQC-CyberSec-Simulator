@@ -28,22 +28,70 @@ import os
 import sys
 import json
 import time
+from pathlib import Path
 
-# Windows CUDA DLL fix: Add CUDA 12.8 bin directory to PATH before importing CuPy
-# This fixes NVRTC DLL not-found errors on Windows for CUDA 13.x / 12.x
-if sys.platform == 'win32':
-    cuda_paths = [
-        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin",
-        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin",
-        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\bin",
-        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\bin",
-        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\bin",
-        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\bin",
-    ]
-    for cuda_path in cuda_paths:
-        if os.path.exists(cuda_path) and cuda_path not in os.environ.get('PATH', ''):
-            os.environ['PATH'] = cuda_path + os.pathsep + os.environ.get('PATH', '')
-            break
+CUDA_HEADER = "cuda.h"
+CUDA_HEADER_REL = Path("include") / CUDA_HEADER
+SHORS_ALGORITHM = "Shor's Algorithm"
+
+
+def _collect_cuda_roots() -> list[Path]:
+    """Gather candidate CUDA toolkit install roots (env, Windows, Linux)."""
+    roots: list[Path] = []
+    for candidate in (os.environ.get("CUDA_PATH"), os.environ.get("CUDA_HOME")):
+        if candidate:
+            roots.append(Path(candidate))
+
+    toolkit_root = Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA")
+    if toolkit_root.is_dir():
+        versioned = sorted(
+            [p for p in toolkit_root.iterdir() if p.is_dir() and p.name.startswith("v")],
+            key=lambda p: p.name,
+            reverse=True,
+        )
+        roots.extend(versioned)
+
+    for linux_root in (Path("/usr/local/cuda"), Path("/usr/local/cuda-13.3")):
+        if linux_root.is_dir():
+            roots.append(linux_root)
+    return roots
+
+
+def _prepend_cuda_bins(resolved: Path) -> None:
+    """Prepend CUDA bin directories to PATH if present."""
+    bin_dirs = [resolved / "bin", resolved / "bin" / "x64"]
+    path_parts = os.environ.get("PATH", "").split(os.pathsep)
+    for bin_dir in reversed(bin_dirs):
+        bin_str = str(bin_dir)
+        if bin_dir.is_dir() and bin_str not in path_parts:
+            path_parts.insert(0, bin_str)
+    os.environ["PATH"] = os.pathsep.join(path_parts)
+
+
+def _configure_cuda_env() -> str | None:
+    """Select newest CUDA toolkit with include headers and set CUDA_PATH before CuPy import."""
+    seen: set[Path] = set()
+    for root in _collect_cuda_roots():
+        try:
+            resolved = root.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not (resolved / CUDA_HEADER_REL).is_file():
+            continue
+        seen.add(resolved)
+        cuda_path = str(resolved)
+        os.environ["CUDA_PATH"] = cuda_path
+        os.environ["CUDA_HOME"] = cuda_path
+        _prepend_cuda_bins(resolved)
+        return cuda_path
+    return None
+
+_SELECTED_CUDA = _configure_cuda_env()
+if _SELECTED_CUDA:
+    print(f"[CUDA] Using toolkit with headers: {_SELECTED_CUDA}", flush=True)
+elif sys.platform == "win32":
+    print(f"[CUDA] WARNING: No CUDA toolkit with include/{CUDA_HEADER} found", flush=True)
+
 import math
 import logging
 import threading
@@ -168,6 +216,60 @@ def detect_gpu_nvidia_smi() -> Dict:
         logger.warning(f"nvidia-smi detection failed: {e}")
     return {}
 
+def _init_cupy() -> bool:
+    """Initialize and verify CuPy GPU operations. Returns True if operational."""
+    global CUPY_AVAILABLE, GPU_OPERATIONAL, GPU_INFO
+    try:
+        import cupy as cp
+        CUPY_AVAILABLE = True
+        log_process("GPU_INIT", "Testing CuPy GPU operations...", "INFO")
+        log_process("GPU_INIT", "Testing basic GPU memory allocation...", "INFO")
+        test_array = cp.array([1, 2, 3, 4, 5], dtype=cp.float64)
+        test_sum = float(cp.sum(test_array).get())
+        cp.cuda.Stream.null.synchronize()
+        del test_array
+        log_process("GPU_INIT", f"✅ Basic GPU array test passed (sum={test_sum})", "INFO")
+
+        log_process("GPU_INIT", "Testing GPU computation (first run may take time for kernel compilation)...", "INFO")
+        np_data = _rng.random(100).astype(np.float32)
+        gpu_data = cp.asarray(np_data)
+        gpu_result = cp.sum(gpu_data * 2.0)
+        float(gpu_result.get())
+        cp.cuda.Stream.null.synchronize()
+        del gpu_data, gpu_result
+        log_process("GPU_INIT", "✅ GPU computation test passed", "INFO")
+
+        GPU_OPERATIONAL = True
+        log_process("GPU_INIT", "✅ CuPy GPU operations verified successfully!", "INFO")
+        log_process("GPU_INIT", "Note: First quantum simulation may take longer due to CUDA kernel JIT compilation", "INFO")
+        cp.cuda.Device(0)
+        GPU_INFO.update({
+            "cupy_version": cp.__version__,
+            "cuda_version": str(cp.cuda.runtime.runtimeGetVersion()),
+            "device_id": 0,
+        })
+        return True
+    except ImportError as e:
+        log_process("GPU_INIT", f"❌ CuPy not available: {e}", "ERROR")
+        CUPY_AVAILABLE = False
+    except Exception as e:
+        log_process("GPU_INIT", f"❌ CuPy GPU operations failed: {e}", "ERROR")
+        GPU_OPERATIONAL = False
+    return False
+
+
+def _init_cuquantum() -> None:
+    """Optionally load cuQuantum SDK."""
+    global CUQUANTUM_AVAILABLE
+    try:
+        from cuquantum import custatevec as cusv  # type: ignore[import-not-found]  # noqa: F401
+        CUQUANTUM_AVAILABLE = True
+        log_process("GPU_INIT", "✅ cuQuantum SDK available", "INFO")
+    except ImportError:
+        log_process("GPU_INIT", "⚠️ cuQuantum SDK not available - using CuPy simulation", "WARNING")
+        CUQUANTUM_AVAILABLE = False
+
+
 def initialize_gpu():
     """Initialize GPU with strict enforcement.
     
@@ -180,9 +282,7 @@ def initialize_gpu():
     log_process("GPU_INIT", "🚀 Starting GPU initialization - GPU-ONLY MODE ENABLED", "INFO")
     log_process("GPU_INIT", f"   Minimum VRAM required: {GPU_MIN_VRAM_MB} MB ({GPU_MIN_VRAM_MB // 1024} GB)", "INFO")
     
-    # Step 1: Detect GPU via nvidia-smi
     GPU_INFO = detect_gpu_nvidia_smi()
-    
     if not GPU_INFO:
         log_process("GPU_INIT", "❌ CRITICAL: No NVIDIA GPU detected via nvidia-smi!", "ERROR")
         if GPU_REQUIRED:
@@ -193,84 +293,39 @@ def initialize_gpu():
     total_vram_mb = GPU_INFO.get('total_memory_mb', 0)
     log_process("GPU_INIT", f"✅ GPU detected: {GPU_INFO['name']} ({total_vram_mb} MB VRAM)", "INFO", GPU_INFO)
     
-    # Step 1b: Enforce 6 GB minimum VRAM
     if total_vram_mb < GPU_MIN_VRAM_MB:
         GPU_VRAM_INSUFFICIENT = True
         log_process("GPU_INIT",
                      f"⚠️ GPU VRAM insufficient: {total_vram_mb} MB < {GPU_MIN_VRAM_MB} MB minimum. "
                      f"Falling back to CPU (NumPy) simulation.", "WARNING")
-        # Allow service to continue on CPU as the only permitted fallback
         return False
     
-    # Step 2: Initialize CuPy for GPU operations
-    try:
-        import cupy as cp
-        CUPY_AVAILABLE = True
-        
-        # Verify GPU operations actually work
-        log_process("GPU_INIT", "Testing CuPy GPU operations...", "INFO")
-        
-        # Test 1: Simple array operation (lightweight - no kernel compilation)
-        log_process("GPU_INIT", "Testing basic GPU memory allocation...", "INFO")
-        test_array = cp.array([1, 2, 3, 4, 5], dtype=cp.float64)
-        test_sum = float(cp.sum(test_array).get())  # Get back to CPU
-        cp.cuda.Stream.null.synchronize()
-        del test_array
-        log_process("GPU_INIT", f"✅ Basic GPU array test passed (sum={test_sum})", "INFO")
-        
-        # Test 2: Smaller GPU test to avoid long kernel compilation time
-        # NOTE: First-time CUDA kernel compilation can take 10-30 seconds
-        log_process("GPU_INIT", "Testing GPU computation (first run may take time for kernel compilation)...", "INFO")
-        np_data = _rng.random(100).astype(np.float32)  # Smaller, simpler test
-        gpu_data = cp.asarray(np_data)
-        gpu_result = cp.sum(gpu_data * 2.0)  # Simple multiplication
-        float(gpu_result.get())
-        cp.cuda.Stream.null.synchronize()
-        del gpu_data, gpu_result
-        log_process("GPU_INIT", "✅ GPU computation test passed", "INFO")
-        
-        GPU_OPERATIONAL = True
-        log_process("GPU_INIT", "✅ CuPy GPU operations verified successfully!", "INFO")
-        log_process("GPU_INIT", "Note: First quantum simulation may take longer due to CUDA kernel JIT compilation", "INFO")
-        
-        # Get detailed GPU info from CuPy
-        cp.cuda.Device(0)
-        GPU_INFO.update({
-            "cupy_version": cp.__version__,
-            "cuda_version": str(cp.cuda.runtime.runtimeGetVersion()),
-            "device_id": 0,
-        })
-        
-    except ImportError as e:
-        log_process("GPU_INIT", f"❌ CuPy not available: {e}", "ERROR")
-        CUPY_AVAILABLE = False
-    except Exception as e:
-        log_process("GPU_INIT", f"❌ CuPy GPU operations failed: {e}", "ERROR")
-        GPU_OPERATIONAL = False
+    _init_cupy()
+    _init_cuquantum()
     
-    # Step 3: Try cuQuantum (optional but preferred)
-    try:
-        from cuquantum import custatevec as cusv  # type: ignore[import-not-found]
-        CUQUANTUM_AVAILABLE = True
-        log_process("GPU_INIT", "✅ cuQuantum SDK available", "INFO")
-    except ImportError:
-        log_process("GPU_INIT", "⚠️ cuQuantum SDK not available - using CuPy simulation", "WARNING")
-        CUQUANTUM_AVAILABLE = False
-    
-    # Final status
     if GPU_OPERATIONAL:
         log_process("GPU_INIT", f"🎮 GPU Quantum Simulator ready: {GPU_INFO['name']}", "INFO")
         return True
-    else:
-        log_process("GPU_INIT", "❌ GPU initialization failed - limited functionality", "ERROR")
-        return False
+    log_process("GPU_INIT", "❌ GPU initialization failed - limited functionality", "ERROR")
+    return False
 
 # Initialize GPU on module load
 GPU_READY = initialize_gpu()
 
-# Flask app
+# Flask app — JSON API for local demo; CSRF not applicable (no cookie-based session forms).
+# Restrict CORS to local simulator / console origins (override via CORS_ORIGINS).
 app = Flask(__name__)
-CORS(app)
+_CORS_ORIGINS = [
+    o.strip() for o in os.environ.get(
+        "CORS_ORIGINS",
+        "http://localhost:8080,http://localhost:8180,http://localhost:8181,"
+        "http://localhost:8182,http://localhost:8183,http://127.0.0.1:8080,"
+        "http://127.0.0.1:8180,http://127.0.0.1:8181,http://127.0.0.1:8182,"
+        "http://127.0.0.1:8183",
+    ).split(",")
+    if o.strip()
+]
+CORS(app, resources={r"/api/*": {"origins": _CORS_ORIGINS}})
 
 # ============================================================================
 # Import GPU arrays (CuPy if available)
@@ -282,9 +337,16 @@ if CUPY_AVAILABLE and GPU_OPERATIONAL:
 elif GPU_VRAM_INSUFFICIENT:
     xp = np
     log_process("ARRAY_BACKEND", f"⚠️ Using NumPy (CPU) - GPU VRAM below {GPU_MIN_VRAM_MB} MB threshold", "WARNING")
+elif GPU_AVAILABLE:
+    xp = np
+    log_process(
+        "ARRAY_BACKEND",
+        "❌ CuPy GPU backend required but not operational - refusing silent NumPy fallback",
+        "ERROR",
+    )
 else:
     xp = np
-    log_process("ARRAY_BACKEND", "⚠️ Falling back to NumPy (CPU) - REDUCED PERFORMANCE", "WARNING")
+    log_process("ARRAY_BACKEND", "⚠️ No NVIDIA GPU - limited NumPy mode (no quantum attack acceleration)", "WARNING")
 
 # ============================================================================
 # Helper Functions
@@ -450,19 +512,22 @@ class ShorsAlgorithm:
         log_process("SHOR", f"[Step {step}/{total}] {message}", "INFO", entry)
         
     def gcd(self, a: int, b: int) -> int:
+        a, b = int(a), int(b)
         while b:
             a, b = b, a % b
-        return a
+        return int(a)
     
     def mod_exp(self, base: int, exp: int, mod: int) -> int:
         result = 1
-        base = base % mod
+        base = int(base) % int(mod)
+        exp = int(exp)
+        mod = int(mod)
         while exp > 0:
             if exp % 2 == 1:
                 result = (result * base) % mod
             exp = exp >> 1
             base = (base * base) % mod
-        return result
+        return int(result)
     
     def quantum_period_finding(self, a: int, modulus: int, num_qubits: int, start_time: float) -> Tuple[int, List[str]]:
         """Quantum period finding with detailed GPU logging."""
@@ -585,6 +650,14 @@ class ShorsAlgorithm:
         fft_success = self._try_gpu_fft(state, num_states)
 
         if not fft_success:
+            # Refuse NumPy CPU fallback when NVIDIA GPU + enough VRAM are present
+            if GPU_AVAILABLE and not GPU_VRAM_INSUFFICIENT:
+                log_process(
+                    "GPU_FFT",
+                    "❌ GPU FFT failed and CPU fallback is DISABLED (GPU+VRAM available)",
+                    "ERROR",
+                )
+                raise RuntimeError("GPU FFT failed; NumPy CPU fallback refused in GPU-only mode")
             fft_success = self._try_cpu_fft_fallback(state, num_states)
 
         if self.use_gpu and fft_success:
@@ -694,15 +767,17 @@ class ShorsAlgorithm:
 
     def _post_process_and_verify(self, a, modulus, r, total_steps, steps):
         """Classical post-processing and verification (Steps 9-10)."""
+        a, modulus, r = int(a), int(modulus), int(r)
         self._log_step("POST_PROCESS", 10, total_steps,
                       "🖥️ Classical post-processing: continued fraction expansion...")
         log_process("CLASSICAL_COMPUTE", "🧮 Extracting period from measurement using continued fractions", "INFO")
         log_process("CLASSICAL_COMPUTE", f"✅ Period r = {r} successfully extracted", "INFO")
         steps.append(f"✅ Period r = {r} extracted from measurement")
 
+        verified = pow(a, r, modulus)
         self._log_step("VERIFY", 11, total_steps,
-                      f"✅ Verifying: a^r mod N = {a}^{r} mod {modulus} = {pow(a, r, modulus)}")
-        log_process("QUANTUM_RESULT", f"✅ Period verification: {a}^{r} mod {modulus} = {pow(a, r, modulus)}", "INFO")
+                      f"✅ Verifying: a^r mod N = {a}^{r} mod {modulus} = {verified}")
+        log_process("QUANTUM_RESULT", f"✅ Period verification: {a}^{r} mod {modulus} = {verified}", "INFO")
 
         self._log_step("COMPLETE", 15, total_steps,
                       "✅ Quantum period finding complete!")
@@ -804,9 +879,11 @@ class ShorsAlgorithm:
             if p is None:
                 p, q = modulus_n, 1
         else:
-            import random
-            p = random.randint(2 ** (key_bits // 2 - 2), 2 ** (key_bits // 2 - 1))
-            q = random.randint(2 ** (key_bits // 2 - 2), 2 ** (key_bits // 2 - 1))
+            # Demo-only plausible factors (not cryptographic); seeded RNG is intentional.
+            lo = 2 ** (key_bits // 2 - 2)
+            hi = 2 ** (key_bits // 2 - 1)
+            p = int(_rng.integers(lo, hi))
+            q = int(_rng.integers(lo, hi))
 
         exec_time = (time.time() - start_time) * 1000
         classical_ops = math.exp((64/9 * math.log(max(modulus_n, 2))) ** (1/3) * (math.log(max(math.log(max(modulus_n, 2)), 1))) ** (2/3))
@@ -820,9 +897,11 @@ class ShorsAlgorithm:
         self._log_step("SUCCESS", 15, total_main_steps,
                       f"🔓 RSA-{key_bits} factorization successful!")
 
+        factor_p = int(p) if p else 0
+        factor_q = int(q) if q else 0
         return ShorsResult(
             success=True, modulus=modulus_n,
-            factor_p=int(p) if p else 0, factor_q=int(q) if q else 0,
+            factor_p=factor_p, factor_q=factor_q,
             qubits_used=num_qubits, execution_time_ms=exec_time,
             gpu_name=gpu_name, gpu_memory_used_mb=get_gpu_memory_usage(),
             algorithm_steps=steps, process_logs=self.process_logs
@@ -1279,6 +1358,7 @@ def get_status():
         "gpu_operational": GPU_OPERATIONAL,
         "cuquantum_available": CUQUANTUM_AVAILABLE,
         "cupy_available": CUPY_AVAILABLE,
+        "cuda_path": os.environ.get("CUDA_PATH"),
         "gpu": GPU_INFO if GPU_INFO else {"name": "NO GPU DETECTED", "status": "CRITICAL"},
         "timeout_limit_hours": MAX_DECRYPTION_TIMEOUT_SECONDS / 3600,
         "capabilities": {
@@ -1336,7 +1416,7 @@ def run_shor():
         result = shor.factor(modulus, key_bits)
         
         return jsonify({
-            "algorithm": "Shor's Algorithm",
+            "algorithm": SHORS_ALGORITHM,
             "purpose": "RSA Factorization",
             "gpu_accelerated": GPU_OPERATIONAL,
             "result": asdict(result),
@@ -1345,7 +1425,7 @@ def run_shor():
         })
         
     except Exception as e:
-        logger.error(f"Shor's algorithm error: {e}")
+        logger.exception("Shor's algorithm error")
         # Try to clear GPU memory after error
         if GPU_OPERATIONAL:
             clear_gpu_memory()
@@ -1386,7 +1466,7 @@ def run_grover():
         })
         
     except Exception as e:
-        logger.error(f"Grover's algorithm error: {e}")
+        logger.exception("Grover's algorithm error")
         # Try to clear GPU memory after error
         if GPU_OPERATIONAL:
             clear_gpu_memory()
@@ -1409,7 +1489,7 @@ def attack_rsa():
     result = shor.factor(N, key_size)
     
     return jsonify({
-        "attack_type": "Shor's Algorithm",
+        "attack_type": SHORS_ALGORITHM,
         "target": f"RSA-{key_size}",
         "modulus": N,
         "gpu_accelerated": GPU_OPERATIONAL,

@@ -101,12 +101,13 @@ PQC-CyberSec-Simulator/
 
 | Requirement | Version | Required | Notes |
 |-------------|---------|----------|-------|
-| **Java JDK** | 21+ | ✅ Required | For all Java services |
+| **Java JDK** | 25+ | ✅ Required | For all Java services (Spring Boot 4.1) |
 | **Maven** | 3.9+ | ✅ Required | Build tool |
 | **Chrome Browser** | Latest | ✅ Required | For Selenium UI tests |
 | **Python** | 3.10+ | ⚠️ Optional | For quantum simulator with GPU |
 | **Docker Desktop** | Latest | ⚠️ Optional | For containerized deployment |
 | **NVIDIA GPU** | RTX 20 series+ | ⚠️ Optional | For GPU quantum simulation |
+| **CUDA Toolkit** | 13.3 | ⚠️ Optional | Required for CuPy JIT (`include/cuda.h`) |
 
 **Note:** The fully automated demo (`run-demo.bat`/`run-demo.sh`) runs everything **without Docker** for simplicity. Docker is only needed if you prefer containerized deployment.
 
@@ -157,8 +158,10 @@ venv\Scripts\activate      # Windows
 # Install dependencies
 pip install -r requirements.txt
 
-# For GPU support (requires CUDA 12)
-pip install cupy-cuda12x cuquantum-python-cu12
+# For GPU support (requires CUDA 13.3 toolkit with cuda.h)
+# Use cupy-cuda13x ONLY — uninstall cupy-cuda12x if present
+pip install cupy-cuda13x
+pip install cuquantum-python-cu13
 ```
 
 Then run the demo as usual - it will automatically detect and use your GPU!
@@ -166,7 +169,8 @@ Then run the demo as usual - it will automatically detect and use your GPU!
 **GPU Status Check:**
 ```bash
 cd quantum-simulator
-python -c "import cupy as cp; print(f'GPU: {cp.cuda.Device().name}')"
+set CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3
+python -c "import cupy as cp; print(f'GPU: {cp.cuda.runtime.getDeviceProperties(0)[\"name\"]}'); print('cupy', cp.__version__)"
 ```
 
 #### Option 2: With Docker (For PostgreSQL Production Setup)
@@ -680,8 +684,9 @@ Open Source - Educational Use Only
 
 ## 🙏 Credits
 
-- **Bouncy Castle** - PQC cryptography library (v1.79)
+- **Bouncy Castle** - PQC cryptography library (v1.85)
 - **NIST** - Post-Quantum Cryptography standards
-- **Spring Boot 3.5** - Microservices framework
+- **Spring Boot 4.1** - Microservices framework
 - **Selenium** - UI testing framework
 - **cuQuantum** - NVIDIA quantum simulation SDK
+- **CuPy (cuda13x)** - GPU arrays on CUDA 13.3

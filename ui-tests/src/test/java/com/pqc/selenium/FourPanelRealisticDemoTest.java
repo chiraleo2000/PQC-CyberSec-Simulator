@@ -595,23 +595,39 @@ public class FourPanelRealisticDemoTest {
 
         System.out.println("⚛️ QUANTUM ATTACK RUNNING!");
         System.out.println("   📍 Watch BOTTOM-RIGHT panel for decryption progress");
-        System.out.println("   ⏱️ RSA-2048: ~30-60 seconds per document");
-        System.out.println("   🛡️ ML-KEM: Attack will FAIL (quantum-resistant)\n");
+        System.out.println("   ⏱️ RSA-2048: Shor decrypt → plaintext proof in Results + console");
+        System.out.println("   🛡️ ML-KEM: PASS-THROUGH (no lattice decrypt — stays protected)\n");
         
         // Poll for completion
         int maxWaitSeconds = 180; // 3 minutes max
         int waited = 0;
+        boolean sawPlaintext = false;
+        boolean sawPassThrough = false;
         
         while (waited < maxWaitSeconds) {
             sleep(5000); // Check every 5 seconds
             waited += 5;
             
-            // Check decryption progress
+            // Check decryption progress + plaintext proof in UI
             try {
                 Long processingCount = (Long) decryptJs.executeScript(
                     "return document.querySelectorAll('.queue-item.processing').length;");
                 Long completedCount = (Long) decryptJs.executeScript(
                     "return document.querySelectorAll('.queue-item.completed, .queue-item.failed').length;");
+                Boolean hasPlaintext = (Boolean) decryptJs.executeScript(
+                    "var el=document.getElementById('resultsPanel')||document.body;" +
+                    "return el && el.innerText && el.innerText.indexOf('DECRYPTED PLAINTEXT')>=0;");
+                Boolean hasPassThrough = (Boolean) decryptJs.executeScript(
+                    "var el=document.getElementById('resultsPanel')||document.body;" +
+                    "return el && el.innerText && (el.innerText.indexOf('PASS-THROUGH')>=0 || el.innerText.indexOf('PQC pass-through')>=0);");
+                if (Boolean.TRUE.equals(hasPlaintext)) {
+                    sawPlaintext = true;
+                    System.out.println("🔓 PROOF: DECRYPTED PLAINTEXT visible in Results panel!");
+                }
+                if (Boolean.TRUE.equals(hasPassThrough)) {
+                    sawPassThrough = true;
+                    System.out.println("🛡️ PROOF: PQC PASS-THROUGH visible (no decrypt attempted)!");
+                }
                 
                 if (processingCount != null && processingCount == 0 && completedCount != null && completedCount > 0) {
                     System.out.println("✅ Quantum decryption batch completed!\n");
@@ -624,13 +640,43 @@ public class FourPanelRealisticDemoTest {
             }
         }
         
-        // Final wait to see results
-        sleep(3000);
+        // Dump plaintext lines from decrypt console / results for the demo log
+        try {
+            String proofDump = (String) decryptJs.executeScript(
+                "var lines=[];" +
+                "if(typeof results!=='undefined'&&results){results.forEach(function(r){" +
+                "  if(r&&r.plaintext){lines.push(r.plaintext);} " +
+                "  if(r&&r.passThrough){lines.push('PQC PASS-THROUGH: '+r.documentId+' '+r.encryption+' NOT decrypted');}" +
+                "});}" +
+                "var consoleEl=document.getElementById('consoleLog')||document.getElementById('console')||document.getElementById('logConsole');" +
+                "if(consoleEl&&consoleEl.innerText){" +
+                "  consoleEl.innerText.split('\\n').forEach(function(l){" +
+                "    if(l.indexOf('DECRYPTED')>=0||l.indexOf('PLAINTEXT')>=0||l.indexOf('PASS-THROUGH')>=0||l.indexOf('RSA FACTORS')>=0){lines.push(l);}" +
+                "  });}" +
+                "return lines.slice(0,40).join('\\n');");
+            if (proofDump != null && !proofDump.isBlank()) {
+                System.out.println("\n═══════════════ DECRYPTED / PROTECTED OUTPUT (from UI) ═══════════════");
+                System.out.println(proofDump);
+                System.out.println("═══════════════════════════════════════════════════════════════════════\n");
+                if (proofDump.contains("DECRYPTED PLAINTEXT") || proofDump.contains("PLAINTEXT")) {
+                    sawPlaintext = true;
+                }
+                if (proofDump.contains("PASS-THROUGH")) {
+                    sawPassThrough = true;
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("ℹ️ Could not dump plaintext from UI: " + e.getMessage());
+        }
+
+        sleep(2000);
         
-        // Show decryption results summary
         System.out.println("📊 DECRYPTION RESULTS VISIBLE IN BOTTOM-RIGHT PANEL:");
-        System.out.println("   • RSA-encrypted documents: DECRYPTED (red)");
-        System.out.println("   • ML-KEM documents: PROTECTED (green)\n");
+        System.out.println("   • RSA-encrypted documents: DECRYPTED plaintext shown (red) — proof=" + sawPlaintext);
+        System.out.println("   • ML-KEM documents: PQC PASS-THROUGH / PROTECTED (green) — proof=" + sawPassThrough + "\n");
+        if (!sawPlaintext) {
+            System.out.println("⚠️ WARNING: Expected DECRYPTED PLAINTEXT block was not found in Results/console.");
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -685,12 +731,12 @@ public class FourPanelRealisticDemoTest {
         System.out.println("║                                                                                ║");
         System.out.println("║  📋 DOCUMENTS PROCESSED:                                                       ║");
         System.out.println("║     • Car License (RSA-2048)  → ⚠️ DECRYPTED by Shor's Algorithm              ║");
-        System.out.println("║     • Tax Filing (ML-KEM-768) → ✅ PROTECTED - Attack FAILED                  ║");
+        System.out.println("║     • Tax Filing (ML-KEM-768) → ✅ PQC PASS-THROUGH (not decrypted)           ║");
         System.out.println("║                                                                                ║");
         System.out.println("║  ⚛️ QUANTUM ATTACK RESULTS:                                                    ║");
-        System.out.println("║     • RSA-2048 encryption: 💔 BROKEN (~30-60s with quantum simulation)        ║");
+        System.out.println("║     • RSA-2048 encryption: 💔 BROKEN — plaintext shown in Results/console     ║");
         System.out.println("║     • RSA-2048 signature:  💔 FORGED (private key recovered)                  ║");
-        System.out.println("║     • ML-KEM-768:          🛡️ SECURE (lattice-based, no quantum attack)       ║");
+        System.out.println("║     • ML-KEM-768:          🛡️ PASS-THROUGH (decrypt skipped; stays safe)      ║");
         System.out.println("║     • ML-DSA-65:           🛡️ SECURE (signature cannot be forged)             ║");
         System.out.println("║                                                                                ║");
         System.out.println("║  🔑 KEY TAKEAWAY:                                                              ║");
