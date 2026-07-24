@@ -4,7 +4,62 @@
 
 ---
 
-## � Encryption Model (Industry Standard)
+## 📸 Demo Screenshots (Live Selenium Run)
+
+Captured from a real `ComprehensiveCryptoTest` run (4-panel Chrome layout + GPU Shor on RTX 4060; PQC pass-through).
+
+### Four-panel demo layout
+
+![Four-panel Selenium demo layout](docs/demo/05-four-panel-layout.png)
+
+*Top-left: Citizen portal · Top-right: Officer review · Bottom-left: Hacker harvest · Bottom-right: Quantum decrypt*
+
+| Panel | What you see |
+|-------|----------------|
+| **Citizen** | Form login, hybrid KEM/signature selection, submitted applications |
+| **Officer** | Pending review queue with RSA vs PQC labels |
+| **Harvest** | Live intercepted packets (RSA vulnerable / ML-KEM quantum-safe) |
+| **Decrypt** | Shor’s attack on RSA + PQC pass-through (no lattice decrypt) |
+
+### Individual panels
+
+<table>
+  <tr>
+    <td width="50%">
+      <p><strong>1. Citizen portal</strong> — submit Car License / Tax Filing</p>
+      <img src="docs/demo/01-citizen-portal.png" alt="Citizen Government Portal" />
+    </td>
+    <td width="50%">
+      <p><strong>2. Officer review</strong> — approve pending applications</p>
+      <img src="docs/demo/02-officer-review.png" alt="Officer Review Dashboard" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <p><strong>3. Hacker harvest</strong> — HNDL packet interception</p>
+      <img src="docs/demo/03-hacker-harvest.png" alt="Hacker Harvest Dashboard" />
+    </td>
+    <td width="50%">
+      <p><strong>4. Quantum decrypt</strong> — RSA Shor + PQC pass-through</p>
+      <img src="docs/demo/04-hacker-decrypt.png" alt="Quantum Decryption Console" />
+    </td>
+  </tr>
+</table>
+
+**Re-capture screenshots after a demo run:**
+
+```bash
+# Services must already be up (run-demo.bat / Docker + local hacker)
+cd ui-tests
+mvn -q test "-Dtest=com.pqc.selenium.ComprehensiveCryptoTest" ^
+  "-Ddemo.keepOpen=false" "-Ddemo.screenshotDir=../docs/demo"
+```
+
+Images are written to [`docs/demo/`](docs/demo/).
+
+---
+
+## 🔐 Encryption Model (Industry Standard)
 
 This simulator uses **realistic hybrid encryption** following industry best practices (like TLS, Signal, WhatsApp):
 
@@ -89,6 +144,7 @@ PQC-CyberSec-Simulator/
 ├── hacker-console/       # Hacker Attack Simulation (Port 8183)
 ├── quantum-simulator/    # Python cuQuantum GPU Quantum Simulator (Port 8184)
 ├── ui-tests/             # Selenium UI Tests (Four-Panel Demo)
+├── docs/demo/            # README screenshots from live Selenium runs
 ├── docker-compose.yml    # Docker deployment configuration
 └── pom.xml               # Parent Maven configuration
 ```
@@ -119,7 +175,7 @@ PQC-CyberSec-Simulator/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/PQC-CyberSec-Simulator.git
+git clone https://github.com/chiraleo2000/PQC-CyberSec-Simulator.git
 cd PQC-CyberSec-Simulator
 
 # 2. Build all modules
@@ -138,6 +194,8 @@ That's it! The demo will automatically:
 - ✅ Keep services running so you can interact, re-test, and inspect logs
 
 **⏱️ Total time:** 6-8 minutes (fully automated, zero interaction)
+
+See [Demo Screenshots](#-demo-screenshots-live-selenium-run) above for captured UI from a live run.
 
 ---
 

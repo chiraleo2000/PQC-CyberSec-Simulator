@@ -11,10 +11,19 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.Select;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
+import javax.imageio.ImageIO;
+import java.awt.Rectangle;
+import java.awt.Robot;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -92,6 +101,12 @@ public class ComprehensiveCryptoTest {
     private int rsaSigSubmissions = 0;
     private int pqcSigSubmissions = 0;
 
+    /** Screenshots for README (repo-root docs/demo). Override with -Ddemo.screenshotDir=... */
+    private static final Path SCREENSHOT_DIR = Paths.get(
+            System.getProperty("demo.screenshotDir", "../docs/demo")).toAbsolutePath().normalize();
+    private static final boolean KEEP_OPEN = !"false".equalsIgnoreCase(
+            System.getProperty("demo.keepOpen", "true"));
+
     @BeforeAll
     void setupBrowsers() {
         WebDriverManager.chromedriver().setup();
@@ -164,15 +179,19 @@ public class ComprehensiveCryptoTest {
 
     @AfterAll
     void closeBrowsers() {
-        // Leave browsers open for manual inspection
-        System.out.println("\n🔍 All 4 browser panels remain open for manual inspection.");
-        System.out.println("🛑 Press Ctrl+C to end the test or close browsers manually.\n");
-        
-        // Keep test running so browsers stay open
-        try {
-            Thread.sleep(Long.MAX_VALUE);
-        } catch (InterruptedException e) {
-            // Test ended
+        if (KEEP_OPEN) {
+            System.out.println("\n🔍 All 4 browser panels remain open for manual inspection.");
+            System.out.println("🛑 Press Ctrl+C to end the test or close browsers manually.\n");
+            try {
+                Thread.sleep(Long.MAX_VALUE);
+            } catch (InterruptedException e) {
+                // Test ended
+            }
+            return;
+        }
+        System.out.println("\n📸 Screenshots saved — closing browsers (-Ddemo.keepOpen=false).");
+        for (WebDriver d : new WebDriver[]{citizenBrowser, officerBrowser, hackerHarvestBrowser, hackerDecryptBrowser}) {
+            try { if (d != null) d.quit(); } catch (Exception ignored) {}
         }
     }
 
@@ -424,7 +443,10 @@ public class ComprehensiveCryptoTest {
         
         // Wait for all decryptions to complete
         System.out.println("⏳ Waiting for quantum decryption visualization...\n");
-        Thread.sleep(5000);
+        try {
+            decryptJs.executeScript("if(typeof startDecryptAll==='function') startDecryptAll();");
+        } catch (Exception ignored) {}
+        Thread.sleep(12000);
         
         // Print final scenario summary
         printScenarioSummary();
@@ -462,9 +484,53 @@ public class ComprehensiveCryptoTest {
         System.out.println("\n🔍 All 4 browser panels remain open for manual inspection.");
         System.out.println("🎮 You can now manually explore the decrypt dashboard and test more scenarios!");
         System.out.println("🛑 Press Ctrl+C to end the test or close browsers manually.\n");
+
+        // Capture README screenshots after full demo run
+        captureDemoScreenshots();
     }
 
     // ==================== Helper Methods ====================
+
+    private void captureDemoScreenshots() {
+        try {
+            Files.createDirectories(SCREENSHOT_DIR);
+            System.out.println("\n📸 Capturing demo screenshots → " + SCREENSHOT_DIR);
+
+            // Refresh panels so latest harvest/decrypt state is visible
+            try { harvestJs.executeScript("if(typeof forceSync==='function') forceSync();"); } catch (Exception ignored) {}
+            try {
+                decryptJs.executeScript(
+                    "if(typeof forceSync==='function') forceSync();" +
+                    "if(typeof startDecryptAll==='function') startDecryptAll();");
+            } catch (Exception ignored) {}
+            Thread.sleep(8000);
+
+            saveDriverShot(citizenBrowser, "01-citizen-portal.png");
+            saveDriverShot(officerBrowser, "02-officer-review.png");
+            saveDriverShot(hackerHarvestBrowser, "03-hacker-harvest.png");
+            saveDriverShot(hackerDecryptBrowser, "04-hacker-decrypt.png");
+            saveDesktopShot("05-four-panel-layout.png");
+
+            System.out.println("✅ Demo screenshots written to " + SCREENSHOT_DIR);
+        } catch (Exception e) {
+            System.out.println("⚠️ Screenshot capture failed: " + e.getMessage());
+        }
+    }
+
+    private void saveDriverShot(WebDriver driver, String fileName) throws Exception {
+        File src = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+        Path dest = SCREENSHOT_DIR.resolve(fileName);
+        Files.copy(src.toPath(), dest, StandardCopyOption.REPLACE_EXISTING);
+        System.out.println("   • " + dest.getFileName() + " (" + Files.size(dest) + " bytes)");
+    }
+
+    private void saveDesktopShot(String fileName) throws Exception {
+        java.awt.Dimension screen = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+        BufferedImage img = new Robot().createScreenCapture(new Rectangle(0, 0, screen.width, screen.height));
+        Path dest = SCREENSHOT_DIR.resolve(fileName);
+        ImageIO.write(img, "png", dest.toFile());
+        System.out.println("   • " + dest.getFileName() + " (" + Files.size(dest) + " bytes)");
+    }
     
     private void login(WebDriver browser, WebDriverWait wait, String username, String password) {
         try {

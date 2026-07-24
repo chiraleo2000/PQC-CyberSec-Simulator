@@ -76,8 +76,8 @@ if defined CUDA_PATH (
 )
 
 REM Build fat jars if missing (one-time / after clean)
-if not exist "%DEMO_DIR%gov-portal\target\gov-portal-1.0.1.jar" goto NEED_BUILD
-if not exist "%DEMO_DIR%hacker-console\target\hacker-console-1.0.1.jar" goto NEED_BUILD
+if not exist "%DEMO_DIR%gov-portal\target\gov-portal-1.1.0.jar" goto NEED_BUILD
+if not exist "%DEMO_DIR%hacker-console\target\hacker-console-1.1.0.jar" goto NEED_BUILD
 echo       [OK] Fat jars present
 goto AFTER_BUILD
 
@@ -108,8 +108,8 @@ taskkill /F /FI "WINDOWTITLE eq Hacker Console*" >nul 2>&1
 echo [2/5] Starting Quantum + Gov + Hacker in PARALLEL...
 if exist "%DEMO_DIR%hacker-console\hacker-data" rmdir /s /q "%DEMO_DIR%hacker-console\hacker-data" >nul 2>&1
 start "Quantum Simulator" /min "%DEMO_DIR%quantum-simulator\start-quantum-fast.bat"
-start "Gov-Portal" /min java -jar "%DEMO_DIR%gov-portal\target\gov-portal-1.0.1.jar" --spring.profiles.active=h2
-start "Hacker Console" /min java -jar "%DEMO_DIR%hacker-console\target\hacker-console-1.0.1.jar" --spring.profiles.active=standalone
+start "Gov-Portal" /min java -jar "%DEMO_DIR%gov-portal\target\gov-portal-1.1.0.jar" --spring.profiles.active=h2
+start "Hacker Console" /min java -jar "%DEMO_DIR%hacker-console\target\hacker-console-1.1.0.jar" --spring.profiles.active=standalone
 
 echo [3/5] Fast-polling readiness (1s)...
 set /a READY_TRY=0
@@ -197,7 +197,7 @@ if exist "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\include\cuda.
     set "PATH=!CUDA_PATH!\bin;!PATH!"
 )
 
-if not exist "%DEMO_DIR%hacker-console\target\hacker-console-1.0.1.jar" (
+if not exist "%DEMO_DIR%hacker-console\target\hacker-console-1.1.0.jar" (
     echo       Building jars for local hacker/quantum...
     cd /d "%DEMO_DIR%"
     call mvn -q -DskipTests package
@@ -217,7 +217,7 @@ pushd "%DEMO_DIR%"
 start /b cmd /c "docker compose up -d --build"
 popd
 start "Quantum Simulator" /min "%DEMO_DIR%quantum-simulator\start-quantum-fast.bat"
-start "Hacker Console" /min java -jar "%DEMO_DIR%hacker-console\target\hacker-console-1.0.1.jar" --spring.profiles.active=standalone
+start "Hacker Console" /min java -jar "%DEMO_DIR%hacker-console\target\hacker-console-1.1.0.jar" --spring.profiles.active=standalone
 
 echo [3/4] Fast-polling readiness...
 set /a READY_TRY=0
